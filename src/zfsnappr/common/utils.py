@@ -1,15 +1,19 @@
 from typing import Callable, Optional, Literal
 from dataclasses import dataclass
-from collections.abc import Collection, Hashable
+from collections import defaultdict
+from collections.abc import Collection, Hashable, Iterable
 import string
 
 from .zfs import Snapshot, LocalZfsCli, RemoteZfsCli, ZfsCli
 
 
-def group_snaps_by[T: Hashable](snapshots: Collection[Snapshot], get_group: Callable[[Snapshot], T]) -> dict[T, list[Snapshot]]:
-  groups: dict[T, list[Snapshot]] = {get_group(s): [] for s in snapshots}
-  for snap in snapshots:
-    groups[get_group(snap)].append(snap)
+def group_by[Group: Hashable, Item](iterable: Iterable[Item], key: Callable[[Item], Group]) -> dict[Group, list[Item]]:
+  groups: dict[Group, list[Item]] = {}
+  for item in iterable:
+    g = key(item)
+    if g not in groups:
+      groups[g] = []
+    groups[g].append(item)
   return groups
 
 
@@ -25,14 +29,14 @@ def is_alnum(value: str):
 
 
 @dataclass(frozen=True)
-class DatasetConfig:
+class DatasetSpec:
   user: str | None
   host: str | None
   port: int | None
   dataset: str | None
 
 
-def parse_dataset_spec(spec: str):
+def read_dataset_spec(raw_spec: str):
   user: str | None
   host: str | None
   port: int | None
@@ -44,7 +48,7 @@ def parse_dataset_spec(spec: str):
   # value_resolved = user@host:port/dataset
 
   # split dataset path from domain/netloc
-  _parts = spec.split('/', maxsplit=1)
+  _parts = raw_spec.split('/', maxsplit=1)
   if len(_parts) == 1:
     _netloc, dataset = _parts[0], None
   elif len(_parts) == 2:
@@ -55,26 +59,26 @@ def parse_dataset_spec(spec: str):
   if _netloc is not None:
     _parts = _netloc.split('@')
     if not all(_parts):
-      raise DatasetParseError(spec)
+      raise DatasetParseError(raw_spec)
     if len(_parts) == 1:
       user, _hostport = None, _parts[0]
     elif len(_parts) == 2:
       user, _hostport = _parts
     else:
-      raise DatasetParseError(spec)
+      raise DatasetParseError(raw_spec)
   else:
     user, _hostport = None, None
 
   if _hostport is not None:
-    _parts = _hostport.split(':')
+    _parts = _hostport.rsplit(':', maxsplit=1)
     if not all(_parts):
-      raise DatasetParseError(spec)
+      raise DatasetParseError(raw_spec)
     if len(_parts) == 1:
       host, port = _parts[0], None
     elif len(_parts) == 2:
       host, port = _parts[0], int(_parts[1])
     else:
-      raise DatasetParseError(spec)
+      raise DatasetParseError(raw_spec)
   else:
     host, port = None, None
 
@@ -82,11 +86,11 @@ def parse_dataset_spec(spec: str):
   if not all([
     not user or is_alnum(user),
     not host or is_alnum(host),
-    not dataset or all(map(is_alnum, dataset.split('/')[1:]))
+    not dataset or all(map(is_alnum, dataset.split('/')))
   ]):
-    raise DatasetParseError(spec)
+    raise DatasetParseError(raw_spec)
 
-  return DatasetConfig(
+  return DatasetSpec(
     user=user,
     host=host,
     port=port,
@@ -98,7 +102,7 @@ def get_zfs_cli(value: str | None) -> tuple[ZfsCli, str | None]:
   if value is None:
     return LocalZfsCli(), None
 
-  config = parse_dataset_spec(value)
+  config = read_dataset_spec(value)
   if config.host:
     cli = RemoteZfsCli(
       host=config.host,
@@ -109,3 +113,45 @@ def get_zfs_cli(value: str | None) -> tuple[ZfsCli, str | None]:
     cli = LocalZfsCli()
 
   return cli, config.dataset
+
+
+@dataclass(frozen=True, eq=True)
+class ConnectionSpec:
+  host: str | None
+  user: str | None
+  port: int | None
+
+  def __str__(self) -> str:
+    if self.host is None:
+      return "local"
+
+    res = self.host
+    if self.user:
+      res = f"{self.user}@{res}"
+    if self.port:
+      res = f"{res}:{self.port}"
+    return res
+
+
+def _create_zfs_cli(host: str | None, user: str | None, port: int | None) -> ZfsCli:
+  if host:
+    return RemoteZfsCli(
+      host=host,
+      user=user,
+      port=port
+    )
+  else:
+    return LocalZfsCli()
+
+
+def parse_datasets(raw_specs: list[str]) -> dict[ConnectionSpec, list[str | None]]:
+  specs = [read_dataset_spec(spec) for spec in raw_specs]
+  groups = group_by(specs, key=lambda s: ConnectionSpec(host=s.host, user=s.user, port=s.port))
+  return {conn: [s.dataset for s in _specs] for conn, _specs in groups.items()}
+
+
+def create_zfs_clis(conns: Collection[ConnectionSpec]) -> dict[ConnectionSpec, ZfsCli]:
+  return {
+    c: _create_zfs_cli(host=c.host, user=c.user, port=c.port)
+    for c in conns
+  }

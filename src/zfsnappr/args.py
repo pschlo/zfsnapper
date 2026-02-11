@@ -21,18 +21,14 @@ class Args(CommonArgs):
 
 def get_args() -> Args:
     # Parent parser for global/common options
-    common = argparse.ArgumentParser(add_help=False, argument_default=argparse.SUPPRESS)
-    common.add_argument('-d', '--dataset', type=str, metavar="DATASET", dest="dataset_spec")
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument('-d', '--dataset', action='append', default=[], metavar="DATASET", dest="dataset_spec")
+    common.add_argument('-x', '--exclude-dataset', action='append', default=[], dest="exclude_dataset_spec")
     common.add_argument('-r', '--recursive', action='store_true')
     common.add_argument('-n', '--dry-run', action='store_true')
-    DEFAULTS = dict(
-        dataset_spec=None,
-        recursive=False,
-        dry_run=False
-    )
 
     # create top-level parser
-    parser = argparse.ArgumentParser(parents=[common], formatter_class=CompactHelpFormatter)
+    parser = argparse.ArgumentParser(formatter_class=CompactHelpFormatter)
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
 
     # create subcommand parsers
@@ -61,9 +57,8 @@ def get_args() -> Args:
         subparsers.add_parser('version')
     )
 
-    # Merge global defaults in
+    # Optionally modify args
     args = dict(parser.parse_args()._get_kwargs())
-    args = DEFAULTS | args
 
     return cast(Args, argparse.Namespace(**args))
 

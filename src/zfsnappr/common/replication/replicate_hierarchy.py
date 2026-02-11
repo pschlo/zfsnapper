@@ -3,7 +3,7 @@ from collections.abc import Collection
 import logging
 
 from ..zfs import Snapshot, ZfsCli
-from ..utils import group_snaps_by
+from ..utils import group_by
 from .replicate_snaps import replicate_snaps
 from zfsnappr.common.exception import ReplicationError
 
@@ -26,7 +26,7 @@ def replicate_hierarchy(
   is_error: bool = False
 
   # Group by absolute source dataset name
-  grouped = group_snaps_by(source_snaps, lambda s: s.dataset)
+  grouped = group_by(source_snaps, lambda s: s.dataset)
 
   src_ds_rootparts = source_dataset_root.split('/')
   dest_ds_rootparts = dest_dataset_root.split('/')

@@ -5,7 +5,7 @@ import logging
 
 from zfsnappr.common.zfs import Snapshot, ZfsCli
 from .policy import apply_policy, KeepPolicy
-from zfsnappr.common.utils import group_snaps_by
+from zfsnappr.common.utils import group_by as _groupby
 from .grouping import GroupType, GET_GROUP
 
 
@@ -31,7 +31,7 @@ def prune_snapshots(
   else:
     log.info(f'Pruning {len(snapshots)} snapshots, grouped by {group_by.value}')
     # group the snapshots. Result is a dict with group name as key and set of snaps as value
-    groups = group_snaps_by(snapshots, GET_GROUP[group_by])
+    groups = _groupby(snapshots, GET_GROUP[group_by])
     keep: list[Snapshot] = []
     destroy: list[Snapshot] = []
     for _group, _snaps in groups.items():

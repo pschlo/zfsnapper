@@ -197,25 +197,34 @@ class ZfsCli(ABC):
       props = {p: v for p, v in zip(properties, lines[i*len(properties):(i+1)*len(properties)])}
       datasets.append(Dataset(props))
     return datasets
-  
+
 
   def get_dataset(self, name: str, properties: Collection[str] = []) -> Dataset:
     """Shorthand method"""
     return next(iter(self.get_datasets([name], properties)))
 
-  
-  def get_all_datasets(self, properties: Collection[str] = []) -> list[Dataset]:
+
+  def get_all_datasets(
+    self,
+    datasets: Collection[str] | None = None,
+    recursive: bool = False,
+    properties: Collection[str] = []
+  ) -> list[Dataset]:
     properties = list(dict.fromkeys(REQUIRED_PROPS + list(properties)))  # eliminate duplicates
 
     cmd = ['zfs', 'list', '-Hp', '-o', ','.join(properties)]
+    if recursive:
+      cmd += ['-r']
+    if datasets is not None:
+      cmd += list(datasets)
     lines = self._run_text_command(cmd).splitlines()
 
-    datasets: list[Dataset] = []
+    _datasets: list[Dataset] = []
     for line in lines:
       props = {p: v for p, v in zip(properties, line.split('\t'))}
-      datasets.append(Dataset(props))
+      _datasets.append(Dataset(props))
   
-    return datasets
+    return _datasets
   
   def create_snapshot(self, fullname: str, recursive: bool = False, properties: dict[str, str] = {}) -> None:
     cmd = ['zfs', 'snapshot']
