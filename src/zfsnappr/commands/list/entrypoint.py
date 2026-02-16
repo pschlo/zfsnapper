@@ -7,7 +7,7 @@ from zfsnappr.common.zfs import Snapshot, Hold, ZfsProperty, ZfsCli, Dataset
 from .args import Args
 from collections import defaultdict
 from zfsnappr.common.filter import filter_snaps, parse_tags
-from zfsnappr.common.utils import parse_datasets, group_by, ConnectionSpec, create_zfs_clis
+from zfsnappr.common.utils import parse_datasets, group_by, ConnectionSpec, create_zfs_clis, fullparse_datasets
 from zfsnappr.common.sort import sort_snaps_by_time
 
 
@@ -24,45 +24,11 @@ class Field:
 # TODO: Use this list output for other subcommands as well
 
 def entrypoint(args: Args) -> None:
-  raw_datasets = parse_datasets(args.dataset_spec)
-  exclude_datasets = parse_datasets(args.exclude_dataset_spec)
-  clis = create_zfs_clis(list(raw_datasets))
-
-  datasets: dict[ConnectionSpec, list[Dataset]] = {}
-  for conn, _datasets in raw_datasets.items():
-    # Determine which datasets to fetch
-    _fetch_datasets: list[str] | None
-    if None in _datasets:
-      if args.recursive:
-        # Fetch everything
-        _fetch_datasets = None
-      else:
-        raise ValueError(f"Cannot act on empty dataset path directly, must use recursion")
-    else:
-      _fetch_datasets = cast(list[str], _datasets)
-
-    # Fetch datasets
-    ds: list[Dataset] = clis[conn].get_all_datasets(_fetch_datasets, recursive=args.recursive)
-
-    # Remove datasets that are excluded
-    filtered_ds: list[Dataset] = []
-    _exclude_ds = exclude_datasets.get(conn, [])
-    if None in _exclude_ds and not args.recursive:
-      raise ValueError(f"Cannot exclude empty dataset path directly, must use recursion")
-    for d in ds:
-      if args.recursive:
-        # Recursive; check if prefix is excluded
-        # The empty dataset (None) is a prefix of everything
-        if any(x is None or d.name.startswith(x) for x in _exclude_ds):
-          continue
-      else:
-        # Non-recursive; check if name is directly excluded
-        if any(d.name == x for x in _exclude_ds):
-          continue
-      filtered_ds.append(d)
-
-    datasets[conn] = filtered_ds
-
+  datasets, clis = fullparse_datasets(
+    specs=args.dataset_spec,
+    exclude_specs=args.exclude_dataset_spec,
+    recursive=args.recursive
+  )
   if not datasets:
     log.info(f"No dataset locations specified, nothing to do")
     return

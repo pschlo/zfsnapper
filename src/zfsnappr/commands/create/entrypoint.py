@@ -4,8 +4,8 @@ import random
 import string
 import logging
 
-from zfsnappr.common.zfs import ZfsProperty
-from zfsnappr.common.utils import get_zfs_cli
+from zfsnappr.common.zfs import ZfsProperty, Dataset
+from zfsnappr.common.utils import fullparse_datasets
 from .args import Args
 
 
@@ -13,9 +13,43 @@ log = logging.getLogger(__name__)
 
 
 def entrypoint(args: Args) -> None:
-  cli, dataset = get_zfs_cli(args.dataset_spec)
-  if dataset is None:
-    raise ValueError("No dataset specified")
+  datasets, clis = fullparse_datasets(
+    specs=args.dataset_spec,
+    exclude_specs=args.exclude_dataset_spec,
+    recursive=args.recursive
+  )
+
+  if not datasets:
+    raise ValueError("No dataset locations specified, nothing to do")
+
+  # Determine which subtrees can be snapshotted atomically
+  # I.e. for each conn, group datasets such that:
+  #   - datasets in a group share a prefix
+  #   - no excluded dataset has this prefix
+  #   - groups should be as large as possible, i.e. prefix as short as possible
+  # Algorithm:
+  #   - iterate over all prefixes, sorted by length in ascending order
+  #   - for each prefix: check whether excluded. If so, discard prefix and continue
+  # find all prefixes where there is nothing excluded
+  groups: dict[str, set[Dataset]] = {}
+  for conn, _datasets in datasets.items():
+    _datasets_left = set(_datasets)
+    all_prefixes: set[str] = set()
+    for d in _datasets:
+      parts = d.name.split('/')
+      prefixes_parts = [parts[:i+1] for i in range(len(parts))]
+      prefixes = {'/'.join(p) for p in prefixes_parts}
+      all_prefixes |= prefixes
+
+    for prefix in sorted(all_prefixes, key=lambda p: p.count('/')):
+      matching_ds = {d for d in _datasets_left if d.name.startswith(prefix)}
+      excluded_ds = ...
+      if not excluded_ds:
+        # Valid group
+        groups[prefix] = matching_ds
+        _datasets_left -= matching_ds
+    assert not _datasets_left
+
   
   # generate random 10 digit alnum string
   #   10 digit alnum -> (26+26+10)^10 values = 839299365868340224 values = ca. 59.5 bit
