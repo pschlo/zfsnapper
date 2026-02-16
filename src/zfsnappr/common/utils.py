@@ -196,7 +196,7 @@ def fullparse_datasets(
       if recursive:
         # Recursive; check if prefix is excluded
         # The empty dataset (None) is a prefix of everything
-        if any(x is None or d.name.startswith(x) for x in _exclude_ds):
+        if any(x is None or is_under_prefix(d.name, prefix=x) for x in _exclude_ds):
           continue
       else:
         # Non-recursive; check if name is directly excluded
@@ -210,8 +210,12 @@ def fullparse_datasets(
 
 
 
-
-
+def is_under_prefix(path: str, prefix: str) -> bool:
+    """
+    Return True iff `path` is equal to `prefix`
+    or is a descendant of it in the slash-separated hierarchy.
+    """
+    return path == prefix or path.startswith(prefix + "/")
 
 
 def parts(path: str) -> list[str]:
@@ -233,7 +237,7 @@ def compute_blocked_by_ancestor(prefixes: set[str], excluded: set[str]) -> dict[
         blocked[p] = (par in excluded) or (par is not None and blocked.get(par, False))
     return blocked
 
-def counting_groups(included: Collection[str], excluded: Collection[str], exclude_blocks_descendants: bool) -> list[str]:
+def maximal_prefix_groups(included: Collection[str], excluded: Collection[str], exclude_blocks_descendants: bool) -> list[str]:
     excluded = set(excluded)
     has_inc: set[str] = set()
     has_exc: set[str] = set()
