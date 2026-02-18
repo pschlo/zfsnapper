@@ -5,6 +5,7 @@ from collections.abc import Collection, Hashable, Iterable
 import string
 
 from .zfs import Snapshot, LocalZfsCli, RemoteZfsCli, ZfsCli, Dataset
+from .prefix_groups import maximal_prefix_groups, Plan
 
 
 def group_by[Group: Hashable, Item](iterable: Iterable[Item], key: Callable[[Item], Group]) -> dict[Group, list[Item]]:
@@ -158,119 +159,107 @@ def create_zfs_clis(conns: Collection[ConnectionSpec]) -> dict[ConnectionSpec, Z
 
 
 
-
 def fullparse_datasets(
-  specs: Collection[str],
-  exclude_specs: Collection[str],
-  recursive: bool
+    specs: Collection[str],
+    exclude_specs: Collection[str],
+    recursive: bool
 ) -> tuple[
-  dict[ConnectionSpec, list[Dataset]],
-  dict[ConnectionSpec, ZfsCli]
+    dict[ConnectionSpec, list[Dataset]],
+    dict[ConnectionSpec, ZfsCli]
 ]:
-  raw_datasets = parse_datasets(specs)
-  exclude_datasets = parse_datasets(exclude_specs)
-  clis = create_zfs_clis(list(raw_datasets))
+    raw_datasets = parse_datasets(specs)
+    exclude_datasets = parse_datasets(exclude_specs)
+    clis = create_zfs_clis(list(raw_datasets))
 
-  datasets: dict[ConnectionSpec, list[Dataset]] = {}
-  for conn, _datasets in raw_datasets.items():
-    # Determine which datasets to fetch
-    _fetch_datasets: list[str] | None
-    if None in _datasets:
-      if recursive:
-        # Fetch everything
-        _fetch_datasets = None
-      else:
-        raise ValueError(f"Cannot act on empty dataset path directly, must use recursion")
-    else:
-      _fetch_datasets = cast(list[str], _datasets)
+    datasets: dict[ConnectionSpec, list[Dataset]] = {}
+    for conn, _datasets in raw_datasets.items():
+        # Determine which datasets to fetch
+        _fetch_datasets: list[str] | None
+        if None in _datasets:
+            if recursive:
+                # Fetch everything
+                _fetch_datasets = None
+            else:
+                raise ValueError(f"Cannot act on empty dataset path directly, must use recursion")
+        else:
+            _fetch_datasets = cast(list[str], _datasets)
 
-    # Fetch datasets
-    ds: list[Dataset] = clis[conn].get_all_datasets(_fetch_datasets, recursive=recursive)
+        # Fetch datasets
+        ds: list[Dataset] = clis[conn].get_all_datasets(_fetch_datasets, recursive=recursive)
 
-    # Remove datasets that are excluded
-    filtered_ds: list[Dataset] = []
-    _exclude_ds = exclude_datasets.get(conn, [])
-    if None in _exclude_ds and not recursive:
-      raise ValueError(f"Cannot exclude empty dataset path directly, must use recursion")
-    for d in ds:
-      if recursive:
-        # Recursive; check if prefix is excluded
-        # The empty dataset (None) is a prefix of everything
-        if any(x is None or is_under_prefix(d.name, prefix=x) for x in _exclude_ds):
-          continue
-      else:
-        # Non-recursive; check if name is directly excluded
-        if any(d.name == x for x in _exclude_ds):
-          continue
-      filtered_ds.append(d)
+        # Remove datasets that are excluded
+        filtered_ds: list[Dataset] = []
+        _exclude_ds = exclude_datasets.get(conn, [])
+        if None in _exclude_ds and not recursive:
+            raise ValueError(f"Cannot exclude empty dataset path directly, must use recursion")
+        for d in ds:
+            if recursive:
+                # Recursive; check if prefix is excluded
+                # The empty dataset (None) is a prefix of everything
+                if any(x is None or is_under_prefix(d.name, prefix=x) for x in _exclude_ds):
+                    continue
+            else:
+                # Non-recursive; check if name is directly excluded
+                if any(d.name == x for x in _exclude_ds):
+                    continue
+            filtered_ds.append(d)
 
-    datasets[conn] = filtered_ds
+        datasets[conn] = filtered_ds
 
-  return datasets, clis
-
-
-
-def is_under_prefix(path: str, prefix: str) -> bool:
-    """
-    Return True iff `path` is equal to `prefix`
-    or is a descendant of it in the slash-separated hierarchy.
-    """
-    return path == prefix or path.startswith(prefix + "/")
-
-
-def parts(path: str) -> list[str]:
-    return [x for x in path.split("/") if x]
-
-def all_prefixes(path: str):
-    cur = []
-    for x in parts(path):
-        cur.append(x)
-        yield "/".join(cur)
-
-def parent(path: str):
-    return path.rsplit("/", 1)[0] if "/" in path else None
-
-def compute_blocked_by_ancestor(prefixes: set[str], excluded: set[str]) -> dict[str, bool]:
-    blocked: dict[str, bool] = {}
-    for p in sorted(prefixes, key=lambda s: s.count("/")):  # parent before child
-        par = parent(p)
-        blocked[p] = (par in excluded) or (par is not None and blocked.get(par, False))
-    return blocked
-
-def maximal_prefix_groups(included: Collection[str], excluded: Collection[str], exclude_blocks_descendants: bool) -> list[str]:
-    excluded = set(excluded)
-    has_inc: set[str] = set()
-    has_exc: set[str] = set()
-
-    # Count for each prefix path how many includes and excludes it matches.
-    # This tells us for each prefix if there are includes and/or excludes under it
-    for path in included:
-        for prefix in all_prefixes(path):
-            has_inc.add(prefix)
-    for path in excluded:
-        for prefix in all_prefixes(path):
-            has_exc.add(prefix)
-
-    is_blocked = compute_blocked_by_ancestor(has_inc, excluded)
-    def is_safe(prefix: str) -> bool:
-        """A prefix is safe iff no excluded datasets are at/under it"""
-        if prefix in has_exc:
-            return False  # excluded at or under prefix
-        if exclude_blocks_descendants and is_blocked[prefix]:
-            return False  # excluded above prefix blocks descendants
-        return True
-
-    groups: list[str] = []
-    for prefix in has_inc:                      # only prefixes that occur on included paths
-        if not is_safe(prefix):
-            continue
-        par = parent(prefix)
-        if par is None or not is_safe(par):    # parent unsafe => this is a maximal safe prefix
-            groups.append(prefix)
-
-    groups.sort(key=lambda s: (s.count("/"), s))
-    return groups
+    return datasets, clis
 
 
 
 
+def fullparse_datasets_2(
+    specs: Collection[str],
+    exclude_specs: Collection[str],
+    recursive: bool
+) -> tuple[
+    dict[ConnectionSpec, Plan],
+    dict[ConnectionSpec, ZfsCli]
+]:
+    raw_datasets = parse_datasets(specs)
+    exclude_datasets = parse_datasets(exclude_specs)
+    clis = create_zfs_clis(raw_datasets.keys())
+
+    datasets: dict[ConnectionSpec, Plan] = {}
+    for conn, _datasets in raw_datasets.items():
+        all_datasets: list[Dataset] = clis[conn].get_all_datasets()
+        path_to_dataset: dict[str, Dataset] = {d.name: d for d in all_datasets}
+        _exclude_ds = exclude_datasets.get(conn, [])
+
+        # Resolve dataset paths
+        plan = maximal_prefix_groups(
+           included=[d or "" for d in _datasets],
+           excluded=[d or "" for d in _exclude_ds],
+           all_datasets=[d.name for d in all_datasets],
+           recursive=recursive
+        )
+
+        # Ensure there are kept datasets
+        if not plan.kept_datasets:
+           raise ValueError(f"Resolving datasets for location '{conn}' yielded no datasets")
+
+        # Ensure all explicitly included datasets are kept, to avoid surprises
+        for d in _datasets:
+           if d and d not in plan.kept_datasets:
+              raise ValueError(f"Dataset '{conn}/{d}' is no longer included in resolved datasets")
+           
+        # Reconstruct datasets
+        kept = {path_to_dataset[d] for d in plan.kept_datasets}
+
+
+        print("KEPT:")
+        print(kept)
+        print()
+        print("SINGLE:")
+        print(plan.single_datasets)
+        print()
+        print("GROUPS:")
+        print(plan.recursive_groups)
+        print()
+
+        datasets[conn] = plan
+
+    return datasets, clis

@@ -58,12 +58,48 @@ class Plan:
 EMPTY_PATH: Path = ()
 
 
-# For debugging
-def is_prefix(g: Path, p: Path) -> bool:
-    return len(g) <= len(p) and p[:len(g)] == g
+def is_prefix(a: Path, b: Path) -> bool:
+    """Returns whether `a` is a prefix of `b`"""
+    return len(a) <= len(b) and b[:len(a)] == a
+
+def is_under(a: Path, b: Path):
+    """Whether `a` is under `b`."""
+    return is_prefix(b, a)
 
 
-def maximal_prefix_groups(included: Collection[str], excluded: Collection[str], all_datasets: Collection[str], recursive: bool, allow_root_group: bool = False) -> Plan:
+def maximal_prefix_groups(
+    included: Collection[str],
+    excluded: Collection[str],
+    all_datasets: Collection[str],
+    recursive: bool,
+    allow_root_group: bool = False,
+    force_group_under_included: bool = False,
+) -> Plan:
+    """
+    Docstring for maximal_prefix_groups
+    
+    :param included: Description
+    :type included: Collection[str]
+    :param excluded: Description
+    :type excluded: Collection[str]
+    :param all_datasets: Description
+    :type all_datasets: Collection[str]
+    :param recursive: Description
+    :type recursive: bool
+    :param allow_root_group:
+        If True, the empty path is allowed as a group path.
+    :type allow_root_group: bool
+    :param force_group_under_included:
+        If True, all group paths will be under `included` paths.
+
+        Useful if `all_datasets` only contains all paths under the `included` paths and it is unknown
+        whether recursion above these trees is safe (may e.g. accidentally hit an unknown tree).
+    :type force_group_under_included: bool
+    :return: Description
+    :rtype: Plan
+    """
+    # Root node of the Trie; stands for the empty path and is purely symbolic,
+    # i.e. root.exists == False
     root = Node()
 
     # Build trie from both include + exclude so the structure covers all relevant prefixes
@@ -79,9 +115,11 @@ def maximal_prefix_groups(included: Collection[str], excluded: Collection[str], 
             n = n.children[seg]
         return n
 
-    inc_paths = [as_path(p) for p in included]
-    exc_paths = [as_path(p) for p in excluded]
-    all_paths = [as_path(p) for p in all_datasets]
+    inc_paths = {as_path(p) for p in included}
+    exc_paths = {as_path(p) for p in excluded}
+    all_paths = {as_path(p) for p in all_datasets}
+    if EMPTY_PATH in all_paths:
+        raise ValueError(f"A dataset with an empty path cannot exist")
 
     # Create all nodes
     for p in all_paths:
@@ -171,6 +209,14 @@ def maximal_prefix_groups(included: Collection[str], excluded: Collection[str], 
         # ASSERT: Node is directly kept or contains kept, and is itself not illegal and does not contain illegal.
         # The node is thus a suitable recursion group.
 
+        if force_group_under_included and not any(is_under(path, p) for p in inc_paths):
+            # path is not under any included path; must descend
+            # Path not under include => path not included => path not kept
+            assert not node.keep
+            for seg, child in node.children.items():
+                queue.append((path + (seg,), child))
+            continue
+
         if path == EMPTY_PATH and not allow_root_group:
             # Cannot use empty path; must descend
             assert not node.keep
@@ -185,10 +231,10 @@ def maximal_prefix_groups(included: Collection[str], excluded: Collection[str], 
     # Compute kept paths
     kept_paths = {p for p in all_paths if get_node(p).keep}
 
-    # Double check that cover is complete
+    # Double-check that cover is complete
     for p in kept_paths:
         # p in singles XOR p is covered by group
-        assert (p in singles) != any(is_prefix(g, p) for g in groups)
+        assert (p in singles) != any(is_under(p, g) for g in groups)
 
     return Plan(
         kept_datasets=set(map(as_str, kept_paths)),

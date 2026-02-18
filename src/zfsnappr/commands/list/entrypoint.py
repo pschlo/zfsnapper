@@ -7,7 +7,7 @@ from zfsnappr.common.zfs import Snapshot, Hold, ZfsProperty, ZfsCli, Dataset
 from .args import Args
 from collections import defaultdict
 from zfsnappr.common.filter import filter_snaps, parse_tags
-from zfsnappr.common.utils import parse_datasets, group_by, ConnectionSpec, create_zfs_clis, fullparse_datasets
+from zfsnappr.common.utils import parse_datasets, group_by, ConnectionSpec, create_zfs_clis, fullparse_datasets, fullparse_datasets_2
 from zfsnappr.common.sort import sort_snaps_by_time
 
 
@@ -24,6 +24,14 @@ class Field:
 # TODO: Use this list output for other subcommands as well
 
 def entrypoint(args: Args) -> None:
+  fullparse_datasets_2(
+      specs=args.dataset_spec,
+      exclude_specs=args.exclude_dataset_spec,
+      recursive=args.recursive
+  )
+  print("exiting")
+  exit()
+
   datasets, clis = fullparse_datasets(
     specs=args.dataset_spec,
     exclude_specs=args.exclude_dataset_spec,
