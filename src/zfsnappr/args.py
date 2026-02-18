@@ -22,9 +22,10 @@ class Args(CommonArgs):
 def get_args() -> Args:
     # Parent parser for global/common options
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument('-d', '--dataset', action='append', default=[], metavar="DATASET", dest="dataset_spec")
-    common.add_argument('-x', '--exclude-dataset', action='append', default=[], dest="exclude_dataset_spec")
-    common.add_argument('-r', '--recursive', action='store_true')
+    common.add_argument('-d', '--dataset', action='append', default=[], metavar="DATASET", dest="inc_dataset_exact")
+    common.add_argument('-D', '--recurse-dataset', action='append', default=[], metavar="DATASET", dest="inc_dataset_recurse")
+    common.add_argument('-x', '--exclude-dataset', action='append', default=[], metavar="DATASET", dest="exc_dataset_exact")
+    common.add_argument('-X', '--recurse-exclude-dataset', action='append', default=[], metavar="DATASET", dest="exc_dataset_recurse")
     common.add_argument('-n', '--dry-run', action='store_true')
 
     # create top-level parser

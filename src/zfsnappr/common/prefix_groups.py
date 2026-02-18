@@ -47,6 +47,9 @@ class Node:
     contains_blocked: bool = False
     contains_unsel: bool = False
 
+    in_inc_recurse_region: bool = False
+    in_exc_recurse_region: bool = False
+
 
 @dataclass
 class Plan:
@@ -68,33 +71,36 @@ def is_under(a: Path, b: Path):
 
 
 def maximal_prefix_groups(
-    included: Collection[str],
-    excluded: Collection[str],
     all_datasets: Collection[str],
-    recursive: bool,
+    *,
+    included_exact: Collection[str] = [],
+    included_recurse: Collection[str] = [],
+    excluded_exact: Collection[str] = [],
+    excluded_recurse: Collection[str] = [],
+
     allow_root_group: bool = False,
-    force_group_under_included: bool = False,
+    conservative_grouping: bool = False,
 ) -> Plan:
     """
     Docstring for maximal_prefix_groups
+
+    `all_datasets` must either contain all datasets, or contain at least `included_exact`, `included_recurse`, and all paths under `included_recurse`.
     
     :param included: Description
     :type included: Collection[str]
     :param excluded: Description
     :type excluded: Collection[str]
-    :param all_datasets: Description
+    :param all_datasets:
+        Used to determine which datasets exist.
     :type all_datasets: Collection[str]
-    :param recursive: Description
-    :type recursive: bool
     :param allow_root_group:
         If True, the empty path is allowed as a group path.
     :type allow_root_group: bool
-    :param force_group_under_included:
-        If True, all group paths will be under `included` paths.
-
-        Useful if `all_datasets` only contains all paths under the `included` paths and it is unknown
-        whether recursion above these trees is safe (may e.g. accidentally hit an unknown tree).
-    :type force_group_under_included: bool
+    :param conservative_grouping:
+        If True, assume that `all_datasets` is minimal and only recurses for paths in `included_recurse`.
+        To be safe and not accidentally cover an unknown dataset subtree,
+        only allow grouping under paths in `included_recurse`.
+    :type conservative_grouping: bool
     :return: Description
     :rtype: Plan
     """
@@ -115,37 +121,41 @@ def maximal_prefix_groups(
             n = n.children[seg]
         return n
 
-    inc_paths = {as_path(p) for p in included}
-    exc_paths = {as_path(p) for p in excluded}
+    inc_exact = {as_path(p) for p in included_exact}
+    exc_exact = {as_path(p) for p in excluded_exact}
+    inc_recurse = {as_path(p) for p in included_recurse}
+    exc_recurse = {as_path(p) for p in excluded_recurse}
     all_paths = {as_path(p) for p in all_datasets}
     if EMPTY_PATH in all_paths:
         raise ValueError(f"A dataset with an empty path cannot exist")
 
     # Create all nodes
     for p in all_paths:
-        n = ensure_node(p)
-        n.exists = True
+        ensure_node(p).exists = True
 
     # Mark terminals
-    for p in inc_paths:
-        n = ensure_node(p)
-        n.inc = True
-
-    for p in exc_paths:
-        n = ensure_node(p)
-        n.exc = True
+    for p in inc_exact:
+        ensure_node(p).inc = True
+    for p in inc_recurse:
+        ensure_node(p).in_inc_recurse_region = True
+    for p in exc_exact:
+        ensure_node(p).exc = True
+    for p in exc_recurse:
+        ensure_node(p).in_exc_recurse_region = True
 
 
     # ---- Iterative top-down propagation for ancestor-blocking ----
     # Propagate inclusions and exclusions
-    if recursive:
-        _q = deque([root])
-        while _q:
-            node = _q.popleft()
-            for child in node.children.values():
-                child.inc |= node.inc
-                child.exc |= node.exc
-                _q.append(child)
+    _q = deque([root])
+    while _q:
+        node = _q.popleft()
+        node.inc |= node.in_inc_recurse_region
+        node.exc |= node.in_exc_recurse_region
+
+        for seg, child in node.children.items():
+            child.in_inc_recurse_region |= node.in_inc_recurse_region
+            child.in_exc_recurse_region |= node.in_exc_recurse_region
+            _q.append(child)
 
 
     # ---- Iterative bottom-up propagation ----
@@ -164,7 +174,7 @@ def maximal_prefix_groups(
         if par is not None:
             par.contains_inc |= node.inc or node.contains_inc
             par.contains_exc |= node.exc or node.contains_exc
-            par.contains_unsel |=  node.unsel or node.contains_unsel
+            par.contains_unsel |= node.unsel or node.contains_unsel
             par.contains_keep |= node.keep or node.contains_keep
             par.contains_blocked |= node.blocked or node.contains_blocked
 
@@ -209,10 +219,14 @@ def maximal_prefix_groups(
         # ASSERT: Node is directly kept or contains kept, and is itself not illegal and does not contain illegal.
         # The node is thus a suitable recursion group.
 
-        if force_group_under_included and not any(is_under(path, p) for p in inc_paths):
-            # path is not under any included path; must descend
-            # Path not under include => path not included => path not kept
-            assert not node.keep
+        # If the paths in all_datasets only recurse for path in inc_recursive,
+        # the current group path may accidentally include unknown other trees.
+        # Optionally be strict about this.
+        # NOTE: node.in_inc_recurse_region IFF node path is at or under some path in inc_recursive
+        if conservative_grouping and not node.in_inc_recurse_region:
+            # path is not under a recursively included path; to be safe, descend
+            if node.keep:
+                singles.add(path)
             for seg, child in node.children.items():
                 queue.append((path + (seg,), child))
             continue

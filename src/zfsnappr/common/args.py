@@ -3,7 +3,8 @@ from typing import Protocol
 
 
 class CommonArgs(Protocol):
-  dataset_spec: list[str]
-  exclude_dataset_spec: list[str]
-  recursive: bool
+  inc_dataset_exact: list[str]
+  inc_dataset_recurse: list[str]
+  exc_dataset_exact: list[str]
+  exc_dataset_recurse: list[str]
   dry_run: bool

@@ -25,9 +25,10 @@ class Field:
 
 def entrypoint(args: Args) -> None:
   fullparse_datasets_2(
-      specs=args.dataset_spec,
-      exclude_specs=args.exclude_dataset_spec,
-      recursive=args.recursive
+      include_exact=args.inc_dataset_exact,
+      include_recurse=args.inc_dataset_recurse,
+      exclude_exact=args.exc_dataset_exact,
+      exclude_recurse=args.exc_dataset_recurse,
   )
   print("exiting")
   exit()

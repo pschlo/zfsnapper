@@ -209,32 +209,52 @@ def fullparse_datasets(
     return datasets, clis
 
 
+@dataclass
+class Policy:
+   include_exact: set[str | None]
+   include_recurse: set[str | None]
+   exclude_exact: set[str | None]
+   exclude_recurse: set[str | None]
 
 
 def fullparse_datasets_2(
-    specs: Collection[str],
-    exclude_specs: Collection[str],
-    recursive: bool
+    include_exact: Collection[str],
+    include_recurse: Collection[str],
+    exclude_exact: Collection[str],
+    exclude_recurse: Collection[str]
 ) -> tuple[
     dict[ConnectionSpec, Plan],
     dict[ConnectionSpec, ZfsCli]
 ]:
-    raw_datasets = parse_datasets(specs)
-    exclude_datasets = parse_datasets(exclude_specs)
-    clis = create_zfs_clis(raw_datasets.keys())
+    _include_exact_parsed = parse_datasets(include_exact)
+    _include_recurse_parsed = parse_datasets(include_recurse)
+    _exclude_exact_parsed = parse_datasets(exclude_exact)
+    _exclude_recurse_parsed = parse_datasets(exclude_recurse)
+
+    conns = _include_exact_parsed.keys() | _include_recurse_parsed.keys()
+    clis = create_zfs_clis(conns)
+    policies = {
+       conn: Policy(
+          include_exact=set(_include_exact_parsed.get(conn, [])),
+          include_recurse=set(_include_recurse_parsed.get(conn, [])),
+          exclude_exact=set(_exclude_exact_parsed.get(conn, [])),
+          exclude_recurse=set(_exclude_recurse_parsed.get(conn, []))
+       )
+       for conn in conns
+    }
 
     datasets: dict[ConnectionSpec, Plan] = {}
-    for conn, _datasets in raw_datasets.items():
+    for conn, policy in policies.items():
         all_datasets: list[Dataset] = clis[conn].get_all_datasets()
         path_to_dataset: dict[str, Dataset] = {d.name: d for d in all_datasets}
-        _exclude_ds = exclude_datasets.get(conn, [])
 
         # Resolve dataset paths
         plan = maximal_prefix_groups(
-           included=[d or "" for d in _datasets],
-           excluded=[d or "" for d in _exclude_ds],
            all_datasets=[d.name for d in all_datasets],
-           recursive=recursive
+           included_exact=[d or "" for d in policy.include_exact],
+           included_recurse=[d or "" for d in policy.include_recurse],
+           excluded_exact=[d or "" for d in policy.exclude_exact],
+           excluded_recurse=[d or "" for d in policy.exclude_recurse],
         )
 
         # Ensure there are kept datasets
@@ -242,10 +262,10 @@ def fullparse_datasets_2(
            raise ValueError(f"Resolving datasets for location '{conn}' yielded no datasets")
 
         # Ensure all explicitly included datasets are kept, to avoid surprises
-        for d in _datasets:
+        for d in policy.include_exact:
            if d and d not in plan.kept_datasets:
               raise ValueError(f"Dataset '{conn}/{d}' is no longer included in resolved datasets")
-           
+
         # Reconstruct datasets
         kept = {path_to_dataset[d] for d in plan.kept_datasets}
 
