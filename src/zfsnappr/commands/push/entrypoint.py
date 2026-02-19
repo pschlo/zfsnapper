@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 
 from zfsnappr.common.replication import replicate
-from zfsnappr.common.utils import get_zfs_cli
+from zfsnappr.common.resolve_datasets import resolve_datasets
 from .args import Args
 
 

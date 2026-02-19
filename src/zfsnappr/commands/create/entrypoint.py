@@ -5,7 +5,7 @@ import string
 import logging
 
 from zfsnappr.common.zfs import ZfsProperty, Dataset
-from zfsnappr.common.utils import fullparse_datasets
+from zfsnappr.common.resolve_datasets import resolve_datasets
 from .args import Args
 
 
@@ -13,10 +13,11 @@ log = logging.getLogger(__name__)
 
 
 def entrypoint(args: Args) -> None:
-  datasets, clis = fullparse_datasets(
-    specs=args.dataset_spec,
-    exclude_specs=args.exclude_dataset_spec,
-    recursive=args.recursive
+  plans, clis = resolve_datasets(
+      include_exact=args.inc_dataset_exact,
+      include_recurse=args.inc_dataset_recurse,
+      exclude_exact=args.exc_dataset_exact,
+      exclude_recurse=args.exc_dataset_recurse,
   )
 
   if not datasets:

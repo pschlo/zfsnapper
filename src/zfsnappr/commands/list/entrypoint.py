@@ -3,12 +3,11 @@ from typing import Optional, Callable, cast
 from dataclasses import dataclass
 import logging
 
-from zfsnappr.common.zfs import Snapshot, Hold, ZfsProperty, ZfsCli, Dataset
 from .args import Args
-from collections import defaultdict
+from zfsnappr.common.zfs import Snapshot, Hold, ZfsProperty, ZfsCli, Dataset
 from zfsnappr.common.filter import filter_snaps, parse_tags
-from zfsnappr.common.utils import parse_datasets, group_by, ConnectionSpec, create_zfs_clis, fullparse_datasets, fullparse_datasets_2
 from zfsnappr.common.sort import sort_snaps_by_time
+from zfsnappr.common.resolve_datasets import resolve_datasets, ResolvedDatasets
 
 
 log = logging.getLogger(__name__)
@@ -24,34 +23,26 @@ class Field:
 # TODO: Use this list output for other subcommands as well
 
 def entrypoint(args: Args) -> None:
-  fullparse_datasets_2(
+  parsed_datasets, clis = resolve_datasets(
       include_exact=args.inc_dataset_exact,
       include_recurse=args.inc_dataset_recurse,
       exclude_exact=args.exc_dataset_exact,
       exclude_recurse=args.exc_dataset_recurse,
   )
-  print("exiting")
-  exit()
-
-  datasets, clis = fullparse_datasets(
-    specs=args.dataset_spec,
-    exclude_specs=args.exclude_dataset_spec,
-    recursive=args.recursive
-  )
-  if not datasets:
-    log.info(f"No dataset locations specified, nothing to do")
-    return
 
   # For each dataset, get all snapshots non-recursively
-  for i, (conn, _datasets) in enumerate(datasets.items()):
+  for i, (conn, datasets) in enumerate(parsed_datasets.items()):
     log.info(f"Location: {conn}")
-    print_list(cli=clis[conn], datasets=[d.name for d in _datasets], args=args)
-    if i < len(datasets)-1:
+    print_list(cli=clis[conn], datasets=datasets, args=args)
+    if i < len(parsed_datasets)-1:
       log.info("")
 
 
-def print_list(cli: ZfsCli, datasets: list[str], args: Args):
-    snaps = cli.get_all_snapshots(datasets=datasets)
+def print_list(cli: ZfsCli, datasets: ResolvedDatasets, args: Args):
+    snaps = [
+      *cli.get_all_snapshots([g.name for g in datasets.recursive_groups], recursive=True),
+      *cli.get_all_snapshots([d.name for d in datasets.single_datasets])
+    ]
     snaps = filter_snaps(snaps, tag=parse_tags(args.tag))
     snaps = sort_snaps_by_time(snaps)
 

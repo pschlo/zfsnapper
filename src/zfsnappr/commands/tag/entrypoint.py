@@ -4,7 +4,7 @@ import logging
 
 from zfsnappr.common.zfs import ZfsProperty, Snapshot
 from zfsnappr.common import filter
-from zfsnappr.common.utils import get_zfs_cli
+from zfsnappr.common.resolve_datasets import resolve_datasets
 from .args import Args
 
 

@@ -4,7 +4,7 @@ import logging
 
 from zfsnappr.common.zfs import ZfsProperty
 from zfsnappr.common import filter
-from zfsnappr.common.utils import get_zfs_cli
+from zfsnappr.common.resolve_datasets import resolve_datasets
 from zfsnappr.common.sort import sort_snaps_by_time
 
 from .policy import KeepPolicy

@@ -1,17 +1,42 @@
 from collections.abc import Collection
 from collections import deque
-from typing import cast, Any
 from dataclasses import dataclass, field
 
 
 type Path = tuple[str, ...]
 
+EMPTY_PATH: Path = ()
 
-def as_path(path: str) -> Path:
-    return tuple(x for x in path.split("/") if x)
 
-def as_str(path: Path) -> str:
+def contains_path(a: Path | str, b: Path | str) -> bool:
+    """Returns whether `a` is a prefix of `b`"""
+    a = _ensure_path(a)
+    b = _ensure_path(b)
+    return len(a) <= len(b) and b[:len(a)] == a
+
+def path_depth(path: Path | str) -> int:
+    """Empty path has depth `0`."""
+    path = _ensure_path(path)
+    return len(path)
+
+
+#### ----- Path/str conversion ----- ####
+
+def str_to_path(path: str) -> Path:
+    if path == "":
+        return EMPTY_PATH
+    parts = path.split('/')
+    assert all(parts)
+    return tuple(parts)
+
+def path_to_str(path: Path) -> str:
+    assert all(path)
     return '/'.join(path)
+
+def _ensure_path(path: Path | str) -> Path:
+    if isinstance(path, str):
+        path = str_to_path(path)
+    return path
 
 
 @dataclass(frozen=False, eq=False)
@@ -52,25 +77,13 @@ class Node:
 
 
 @dataclass
-class Plan:
+class ResolvedPaths:
     kept_datasets: set[str]
     recursive_groups: set[str]
     single_datasets: set[str]
 
 
-EMPTY_PATH: Path = ()
-
-
-def is_prefix(a: Path, b: Path) -> bool:
-    """Returns whether `a` is a prefix of `b`"""
-    return len(a) <= len(b) and b[:len(a)] == a
-
-def is_under(a: Path, b: Path):
-    """Whether `a` is under `b`."""
-    return is_prefix(b, a)
-
-
-def maximal_prefix_groups(
+def resolve_paths(
     all_datasets: Collection[str],
     *,
     included_exact: Collection[str] = [],
@@ -80,7 +93,7 @@ def maximal_prefix_groups(
 
     allow_root_group: bool = False,
     conservative_grouping: bool = False,
-) -> Plan:
+) -> ResolvedPaths:
     """
     Docstring for maximal_prefix_groups
 
@@ -121,11 +134,11 @@ def maximal_prefix_groups(
             n = n.children[seg]
         return n
 
-    inc_exact = {as_path(p) for p in included_exact}
-    exc_exact = {as_path(p) for p in excluded_exact}
-    inc_recurse = {as_path(p) for p in included_recurse}
-    exc_recurse = {as_path(p) for p in excluded_recurse}
-    all_paths = {as_path(p) for p in all_datasets}
+    inc_exact = {str_to_path(p) for p in included_exact}
+    exc_exact = {str_to_path(p) for p in excluded_exact}
+    inc_recurse = {str_to_path(p) for p in included_recurse}
+    exc_recurse = {str_to_path(p) for p in excluded_recurse}
+    all_paths = {str_to_path(p) for p in all_datasets}
     if EMPTY_PATH in all_paths:
         raise ValueError(f"A dataset with an empty path cannot exist")
 
@@ -247,11 +260,17 @@ def maximal_prefix_groups(
 
     # Double-check that cover is complete
     for p in kept_paths:
-        # p in singles XOR p is covered by group
-        assert (p in singles) != any(is_under(p, g) for g in groups)
+        # Either covered by single, or covered by exactly one group
+        _covered_by_single = p in singles
+        _covered_by_groups = sum(contains_path(g, p) for g in groups)
+        assert (
+            (_covered_by_single and _covered_by_groups == 0)
+            or
+            (not _covered_by_single and _covered_by_groups == 1)
+        )
 
-    return Plan(
-        kept_datasets=set(map(as_str, kept_paths)),
-        single_datasets=set(map(as_str, singles)),
-        recursive_groups=set(map(as_str, groups))
+    return ResolvedPaths(
+        kept_datasets=set(map(path_to_str, kept_paths)),
+        single_datasets=set(map(path_to_str, singles)),
+        recursive_groups=set(map(path_to_str, groups))
     )
