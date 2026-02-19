@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Optional, Callable, cast
 from dataclasses import dataclass
+from collections.abc import Collection
 import logging
 
 from .args import Args
@@ -28,17 +29,17 @@ def entrypoint(args: Args) -> None:
   # For each dataset, get all snapshots non-recursively
   for i, (conn, (datasets, cli)) in enumerate(resolved.items()):
     log.info(f"Location: {conn}")
-    print_list(cli=cli, datasets=datasets, args=args)
+    list_conn(cli=cli, datasets=datasets, tags=args.tag)
     if i < len(resolved)-1:
       log.info("")
 
 
-def print_list(cli: ZfsCli, datasets: ResolvedDatasets, args: Args):
+def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, tags: Collection[str]):
     snaps = [
       *cli.get_all_snapshots([g.name for g in datasets.recursive_groups], recursive=True),
       *cli.get_all_snapshots([d.name for d in datasets.single_datasets])
     ]
-    snaps = filter_snaps(snaps, tag=parse_tags(args.tag))
+    snaps = filter_snaps(snaps, tag=parse_tags(tags))
     snaps = sort_snaps_by_time(snaps)
 
 
