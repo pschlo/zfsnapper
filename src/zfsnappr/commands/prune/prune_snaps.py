@@ -5,8 +5,9 @@ import logging
 
 from zfsnappr.common.zfs import Snapshot, ZfsCli
 from .policy import apply_policy, KeepPolicy
-from zfsnappr.common.utils import group_by as _groupby
+from zfsnappr.common.utils import group_by as _groupby, sort_dict
 from .grouping import GroupType, GET_GROUP
+from zfsnappr.common.sort import sort_datasets, sort_snaps_by_time, dataset_sortkey
 
 
 log = logging.getLogger(__name__)
@@ -31,7 +32,10 @@ def prune_snapshots(
   else:
     log.info(f'Pruning {len(snapshots)} snapshots, grouped by {group_by.value}')
     # group the snapshots. Result is a dict with group name as key and set of snaps as value
-    groups = _groupby(snapshots, GET_GROUP[group_by])
+    groups = sort_dict(
+      _groupby(snapshots, key=GET_GROUP[group_by]),
+      key=dataset_sortkey
+    )
     keep: list[Snapshot] = []
     destroy: list[Snapshot] = []
     for _group, _snaps in groups.items():

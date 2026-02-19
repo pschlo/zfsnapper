@@ -8,6 +8,7 @@ from collections.abc import Collection
 from zfsnappr.common.zfs import ZfsProperty, Dataset, ZfsCli
 from zfsnappr.common.resolve_datasets import resolve_dataset_args, ResolvedDatasets, ConnSpec
 from .args import Args
+from zfsnappr.common.sort import dataset_sortkey
 
 
 log = logging.getLogger(__name__)
@@ -24,10 +25,12 @@ def generate_random_name() -> str:
 def entrypoint(args: Args) -> None:
   resolved = resolve_dataset_args(args)
   for conn, (datasets, cli) in resolved.items():
-    for dataset in datasets.recursive_groups:
-      create_snapshot(conn=conn, cli=cli, dataset=dataset, tags=args.tag, recurse=True)
-    for dataset in datasets.single_datasets:
-      create_snapshot(conn=conn, cli=cli, dataset=dataset, tags=args.tag, recurse=False)
+    atomic_creates = [
+      *((d, False) for d in datasets.single_datasets),
+      *((d, True) for d in datasets.recursive_groups)
+    ]
+    for dataset, recurse in sorted(atomic_creates, key=lambda t: dataset_sortkey(t[0])):
+      create_snapshot(conn=conn, cli=cli, dataset=dataset, tags=args.tag, recurse=recurse)
 
 
 def create_snapshot(conn: ConnSpec, cli: ZfsCli, dataset: Dataset, tags: Collection[str], recurse: bool):
