@@ -232,10 +232,8 @@ def resolve_paths(
         # ASSERT: Node is directly kept or contains kept, and is itself not illegal and does not contain illegal.
         # The node is thus a suitable recursion group.
 
-        # If the paths in all_datasets only recurse for path in inc_recursive,
-        # the current group path may accidentally include unknown other trees.
-        # Optionally be strict about this.
-        # NOTE: node.in_inc_recurse_region IFF node path is at or under some path in inc_recursive
+        # Enforce conservative grouping.
+        # NOTE: node.in_inc_recurse_region IFF node path is at or under some path in included_recurse
         if conservative_grouping and not node.in_inc_recurse_region:
             # path is not under a recursively included path; to be safe, descend
             if node.keep:
@@ -251,8 +249,15 @@ def resolve_paths(
                 queue.append((path + (seg,), child))
             continue
 
-        # Take and stop descend
-        groups.add(path)
+        # Take and stop descend.
+        # If node does not have existing children, single vs group does not matter; we choose to treat as single.
+        # NOTE: At this point, node contains no existing nodes IFF node contains no kept nodes
+        #   Also: Node contains no kept nodes IMPLIES node is kept
+        if not node.contains_keep:
+            assert node.keep
+            singles.add(path)
+        else:
+            groups.add(path)
 
 
     # Compute kept paths

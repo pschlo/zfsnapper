@@ -7,7 +7,7 @@ from .args import Args
 from zfsnappr.common.zfs import Snapshot, Hold, ZfsProperty, ZfsCli, Dataset
 from zfsnappr.common.filter import filter_snaps, parse_tags
 from zfsnappr.common.sort import sort_snaps_by_time
-from zfsnappr.common.resolve_datasets import resolve_datasets, ResolvedDatasets
+from zfsnappr.common.resolve_datasets import resolve_dataset_args, ResolvedDatasets
 
 
 log = logging.getLogger(__name__)
@@ -23,18 +23,13 @@ class Field:
 # TODO: Use this list output for other subcommands as well
 
 def entrypoint(args: Args) -> None:
-  parsed_datasets, clis = resolve_datasets(
-      include_exact=args.inc_dataset_exact,
-      include_recurse=args.inc_dataset_recurse,
-      exclude_exact=args.exc_dataset_exact,
-      exclude_recurse=args.exc_dataset_recurse,
-  )
+  resolved = resolve_dataset_args(args)
 
   # For each dataset, get all snapshots non-recursively
-  for i, (conn, datasets) in enumerate(parsed_datasets.items()):
+  for i, (conn, (datasets, cli)) in enumerate(resolved.items()):
     log.info(f"Location: {conn}")
-    print_list(cli=clis[conn], datasets=datasets, args=args)
-    if i < len(parsed_datasets)-1:
+    print_list(cli=cli, datasets=datasets, args=args)
+    if i < len(resolved)-1:
       log.info("")
 
 

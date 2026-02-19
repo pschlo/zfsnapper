@@ -5,11 +5,12 @@ from collections.abc import Collection
 from .zfs import ZfsCli, Dataset, RemoteZfsCli, LocalZfsCli
 from .resolve_paths import resolve_paths
 from .parse_dataset_spec import parse_dataset_spec
-from .utils import group_by
+from .args import CommonArgs
+from .utils import group_by, combine_dicts
 
 
 @dataclass(frozen=True, eq=True)
-class ConnectionSpec:
+class ConnSpec:
   host: str | None
   user: str | None
   port: int | None
@@ -41,7 +42,7 @@ class ResolvedDatasets:
    recursive_groups: set[Dataset]
 
 
-def create_zfs_cli(conn: ConnectionSpec) -> ZfsCli:
+def create_zfs_cli(conn: ConnSpec) -> ZfsCli:
   if conn.host:
     return RemoteZfsCli(
       host=conn.host,
@@ -52,9 +53,9 @@ def create_zfs_cli(conn: ConnectionSpec) -> ZfsCli:
     return LocalZfsCli()
 
 
-def parse_dataset_specs(raw_specs: Collection[str]) -> dict[ConnectionSpec, list[str | None]]:
+def parse_dataset_specs(raw_specs: Collection[str]) -> dict[ConnSpec, list[str | None]]:
   specs = [parse_dataset_spec(spec) for spec in raw_specs]
-  groups = group_by(specs, key=lambda s: ConnectionSpec(host=s.host, user=s.user, port=s.port))
+  groups = group_by(specs, key=lambda s: ConnSpec(host=s.host, user=s.user, port=s.port))
   return {conn: [s.dataset for s in _specs] for conn, _specs in groups.items()}
 
 
@@ -64,8 +65,8 @@ def resolve_datasets(
     exclude_exact: Collection[str],
     exclude_recurse: Collection[str]
 ) -> tuple[
-    dict[ConnectionSpec, ResolvedDatasets],
-    dict[ConnectionSpec, ZfsCli]
+    dict[ConnSpec, ResolvedDatasets],
+    dict[ConnSpec, ZfsCli]
 ]:
     _include_exact_parsed = parse_dataset_specs(include_exact)
     _include_recurse_parsed = parse_dataset_specs(include_recurse)
@@ -84,7 +85,7 @@ def resolve_datasets(
        for conn in conns
     }
 
-    datasets: dict[ConnectionSpec, ResolvedDatasets] = {}
+    datasets: dict[ConnSpec, ResolvedDatasets] = {}
     for conn, policy in policies.items():
         all_datasets: list[Dataset] = clis[conn].get_all_datasets()
         path_to_dataset: dict[str, Dataset] = {d.name: d for d in all_datasets}
@@ -118,3 +119,15 @@ def resolve_datasets(
         datasets[conn] = resolved_datasets
 
     return datasets, clis
+
+
+def resolve_dataset_args(args: CommonArgs):
+  """Shorthand function for parsing dataset args."""
+  return combine_dicts(
+    *resolve_datasets(
+        include_exact=args.inc_dataset_exact,
+        include_recurse=args.inc_dataset_recurse,
+        exclude_exact=args.exc_dataset_exact,
+        exclude_recurse=args.exc_dataset_recurse,
+    )
+  )
