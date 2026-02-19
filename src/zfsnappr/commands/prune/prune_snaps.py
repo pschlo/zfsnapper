@@ -7,7 +7,7 @@ from zfsnappr.common.zfs import Snapshot, ZfsCli
 from .policy import apply_policy, KeepPolicy
 from zfsnappr.common.utils import group_by as _groupby, sort_dict
 from .grouping import GroupType, GET_GROUP
-from zfsnappr.common.sort import sort_datasets, sort_snaps_by_time, dataset_sortkey
+from zfsnappr.common.sort import dataset_sortkey
 
 
 log = logging.getLogger(__name__)

@@ -6,7 +6,8 @@ import logging
 from collections.abc import Collection
 
 from zfsnappr.common.zfs import ZfsProperty, Dataset, ZfsCli
-from zfsnappr.common.resolve_datasets import resolve_dataset_args, ResolvedDatasets, ConnSpec
+from zfsnappr.common.command_utils import resolve_dataset_args
+from zfsnappr.common.resolve_datasets import ConnSpec
 from .args import Args
 from zfsnappr.common.sort import dataset_sortkey
 
@@ -30,10 +31,10 @@ def entrypoint(args: Args) -> None:
       *((d, True) for d in datasets.recursive_groups)
     ]
     for dataset, recurse in sorted(atomic_creates, key=lambda t: dataset_sortkey(t[0])):
-      create_snapshot(conn=conn, cli=cli, dataset=dataset, tags=args.tag, recurse=recurse)
+      create_snapshot(conn=conn, cli=cli, dataset=dataset, filter_tags=args.tag, recurse=recurse)
 
 
-def create_snapshot(conn: ConnSpec, cli: ZfsCli, dataset: Dataset, tags: Collection[str], recurse: bool):
+def create_snapshot(conn: ConnSpec, cli: ZfsCli, dataset: Dataset, filter_tags: Collection[str], recurse: bool):
   shortname = generate_random_name()
   fullname = f'{dataset.name}@{shortname}'
 
@@ -41,7 +42,7 @@ def create_snapshot(conn: ConnSpec, cli: ZfsCli, dataset: Dataset, tags: Collect
     fullname=fullname,
     recursive=recurse,
     properties={
-      ZfsProperty.CUSTOM_TAGS: ','.join(tags)
+      ZfsProperty.CUSTOM_TAGS: ','.join(filter_tags)
     }
   )
 

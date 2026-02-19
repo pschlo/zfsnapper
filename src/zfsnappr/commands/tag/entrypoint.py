@@ -1,10 +1,11 @@
 from __future__ import annotations
 from typing import Optional, cast, Literal, Callable
+from collections.abc import Collection
 import logging
 
-from zfsnappr.common.zfs import ZfsProperty, Snapshot
-from zfsnappr.common import filter
-from zfsnappr.common.resolve_datasets import resolve_datasets
+from zfsnappr.common.zfs import ZfsProperty, Snapshot, ZfsCli
+from zfsnappr.common.resolve_datasets import ResolvedDatasets
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args
 from .args import Args
 
 
@@ -12,19 +13,17 @@ log = logging.getLogger(__name__)
 
 TAG_SEPARATOR = "_"
 
+type Operation = tuple[
+    Callable[[Snapshot], Optional[set[str]]],
+    Literal['ADD', 'SET', 'REMOVE']
+]
+
 
 def entrypoint(args: Args) -> None:
-  cli, dataset = get_zfs_cli(args.dataset_spec)
-  if dataset is None:
-    raise ValueError(f"No dataset specified")
+  resolved = resolve_dataset_args(args)
 
   # --- determine operations ---
-  operations: list[
-    tuple[
-      Callable[[Snapshot], Optional[set[str]]],
-      Literal['ADD', 'SET', 'REMOVE']
-    ]
-  ] = []
+  operations: list[Operation] = []
 
   # TODO: remove
   ...
@@ -47,18 +46,35 @@ def entrypoint(args: Args) -> None:
     log.info(f"No tag operations specified, nothing to do")
     return
 
+  # Apply tag command to each connection
+  for i, (conn, (datasets, cli)) in enumerate(resolved.items()):
+    tag_conn(
+      cli=cli,
+      datasets=datasets,
+      operations=operations,
+      fetch_props=[p for p in [args.add_from_prop, args.set_from_prop] if p is not None],
+      filter_tags=args.tag,
+      filter_snaps=args.snapshot
+    )
 
+
+def tag_conn(
+  cli: ZfsCli,
+  datasets: ResolvedDatasets,
+  operations: list[Operation],
+  fetch_props: Collection[str],
+  filter_tags: Collection[str],
+  filter_snaps: Collection[str]
+):
   # --- get snapshots ---
-  props = [p for p in [args.add_from_prop, args.set_from_prop] if p is not None]
-  _all_snaps = cli.get_all_snapshots(datasets=[dataset], recursive=args.recursive, properties=props)
-  snapshots = filter.filter_snaps(_all_snaps, tag=filter.parse_tags(args.tag), shortname=filter.parse_shortnames(args.snapshot))
-  if not snapshots:
-    log.info(f"No matching snapshots, nothing to do")
-    return
+  snaps = fetch_snaps(cli, datasets, props=fetch_props, filter_tags=filter_tags, filter_snaps=filter_snaps)
+  if not snaps:
+      log.info(f"No matching snapshots, nothing to do")
+      return
 
   # --- apply tag operations ---
   # SET sets the tags even if no new tags were found, while ADD and REMOVE leave the tags potentially unset, i.e. as None
-  for snap in snapshots:
+  for snap in snaps:
     for get_tags, action in operations:
       tags = snap.tags
       new_tags = get_tags(snap)

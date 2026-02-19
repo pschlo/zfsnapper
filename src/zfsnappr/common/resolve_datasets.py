@@ -122,16 +122,3 @@ def resolve_datasets(
         datasets[conn] = resolved_datasets
 
     return datasets, clis
-
-
-def resolve_dataset_args(args: CommonArgs):
-  """Shorthand function for parsing dataset args."""
-  return combine_dicts(
-    *resolve_datasets(
-        include_exact=args.inc_dataset_exact,
-        include_recurse=args.inc_dataset_recurse,
-        exclude_exact=args.exc_dataset_exact,
-        exclude_recurse=args.exc_dataset_recurse,
-        strict=args.strict
-    )
-  )

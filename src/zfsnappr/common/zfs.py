@@ -44,7 +44,7 @@ class Snapshot:
   shortname: str
   guid: int
   timestamp: datetime
-  tags: Optional[set[str]]
+  tags: frozenset[str] | None
   holds: int
 
   def __init__(self, properties: dict[str, str]):
@@ -60,7 +60,7 @@ class Snapshot:
     if ps[P.CUSTOM_TAGS] == '-':
       self.tags = None
     else:
-      self.tags = set(t for t in ps[P.CUSTOM_TAGS].split(',') if t)  # ignore empty tags
+      self.tags = frozenset(t for t in ps[P.CUSTOM_TAGS].split(',') if t)  # ignore empty tags
 
   def __repr__(self) -> str:
     return f"Snapshot({self.properties})"

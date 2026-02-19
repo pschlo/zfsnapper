@@ -4,10 +4,8 @@ import logging
 from collections.abc import Collection
 
 from zfsnappr.common.zfs import ZfsProperty, ZfsCli, Dataset, Snapshot
-from zfsnappr.common import filter
-from zfsnappr.common.resolve_datasets import resolve_dataset_args, ResolvedDatasets
-from zfsnappr.common.sort import sort_snaps_by_time
-from zfsnappr.common.utils import group_by
+from zfsnappr.common.resolve_datasets import ResolvedDatasets
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args
 
 from .policy import KeepPolicy
 from .prune_snaps import prune_snapshots
@@ -47,7 +45,7 @@ def entrypoint(args: Args):
        datasets=datasets,
        policy=policy,
        filter_tags=args.tag,
-       filter_snapshots=args.snapshot,
+       filter_snaps=args.snapshot,
        groupby=args.group_by,
        dry_run=args.dry_run,
     )
@@ -60,17 +58,12 @@ def prune_conn(
     datasets: ResolvedDatasets,
     policy: KeepPolicy,
     filter_tags: Collection[str],
-    filter_snapshots: Collection[str],
+    filter_snaps: Collection[str],
     groupby: str,
     dry_run: bool
 ):
     # Fetch all snapshots for all datasets
-    snaps = [
-        *cli.get_all_snapshots([g.name for g in datasets.recursive_groups], recursive=True),
-        *cli.get_all_snapshots([d.name for d in datasets.single_datasets])
-    ]
-    snaps = filter.filter_snaps(snaps, tag=filter.parse_tags(filter_tags), shortname=filter.parse_shortnames(filter_snapshots))
-    snaps = sort_snaps_by_time(snaps)
+    snaps = fetch_snaps(cli, datasets, filter_tags=filter_tags, filter_snaps=filter_snaps)
     if not snaps:
         log.info(f"No matching snapshots, nothing to do")
         return
@@ -86,5 +79,5 @@ def prune_conn(
         policy,
         dry_run=dry_run,
         group_by=get_grouptype[groupby],
-        allow_destroy_all=bool(filter_snapshots)  # only allow if specific snapshots were passed
+        allow_destroy_all=bool(filter_snaps)  # only allow if specific snapshots were passed
     )
