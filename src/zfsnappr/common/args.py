@@ -8,3 +8,4 @@ class CommonArgs(Protocol):
   exc_dataset_exact: list[str]
   exc_dataset_recurse: list[str]
   dry_run: bool
+  strict: bool

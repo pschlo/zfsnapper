@@ -27,6 +27,7 @@ def get_args() -> Args:
     common.add_argument('-x', '--exclude-dataset', action='append', default=[], metavar="DATASET", dest="exc_dataset_exact")
     common.add_argument('-X', '--recurse-exclude-dataset', action='append', default=[], metavar="DATASET", dest="exc_dataset_recurse")
     common.add_argument('-n', '--dry-run', action='store_true')
+    common.add_argument('-s', '--strict', action='store_true')
 
     # create top-level parser
     parser = argparse.ArgumentParser(formatter_class=CompactHelpFormatter)

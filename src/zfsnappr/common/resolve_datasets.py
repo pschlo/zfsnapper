@@ -63,7 +63,8 @@ def resolve_datasets(
     include_exact: Collection[str],
     include_recurse: Collection[str],
     exclude_exact: Collection[str],
-    exclude_recurse: Collection[str]
+    exclude_recurse: Collection[str],
+    strict: bool = False
 ) -> tuple[
     dict[ConnSpec, ResolvedDatasets],
     dict[ConnSpec, ZfsCli]
@@ -97,6 +98,8 @@ def resolve_datasets(
            included_recurse=[d or "" for d in policy.include_recurse],
            excluded_exact=[d or "" for d in policy.exclude_exact],
            excluded_recurse=[d or "" for d in policy.exclude_recurse],
+           conservative_grouping=strict,
+           strict_exclude=strict
         )
 
         # Ensure there are kept datasets
@@ -129,5 +132,6 @@ def resolve_dataset_args(args: CommonArgs):
         include_recurse=args.inc_dataset_recurse,
         exclude_exact=args.exc_dataset_exact,
         exclude_recurse=args.exc_dataset_recurse,
+        strict=args.strict
     )
   )

@@ -93,6 +93,7 @@ def resolve_paths(
 
     allow_root_group: bool = False,
     conservative_grouping: bool = False,
+    strict_exclude: bool = False
 ) -> ResolvedPaths:
     """
     Docstring for maximal_prefix_groups
@@ -114,6 +115,10 @@ def resolve_paths(
         To be safe and not accidentally cover an unknown dataset subtree,
         only allow grouping under paths in `included_recurse`.
     :type conservative_grouping: bool
+    :param strict_exclude:
+        If True, groups may not cover excluded paths even if they do not exist.
+        By default, groups only avoid excluded paths that exist.
+    :type strict_exclude: bool
     :return: Description
     :rtype: Plan
     """
@@ -211,7 +216,7 @@ def resolve_paths(
 
         # ASSERT: Node is directly kept or contains kept
 
-        if node.blocked or node.unsel:
+        if node.blocked or node.unsel or (strict_exclude and node.exc):
             # Cannot pick as recursive group since node is blocked; descend
             assert not node.keep
             for seg, child in node.children.items():
@@ -220,7 +225,7 @@ def resolve_paths(
 
         # ASSERT: Node is directly kept or contains kept, and is itself not illegal
 
-        if node.contains_blocked or node.contains_unsel:
+        if node.contains_blocked or node.contains_unsel or (strict_exclude and node.contains_exc):
             # Cannot pick as recursive group since node contains blocked; descend
             # If we need to keep this dataset (which itself is not blocked), it must be added as single
             if node.keep:
