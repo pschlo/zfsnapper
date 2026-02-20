@@ -69,7 +69,7 @@ def prune_snapshots[G](
     log.info(f"    {_num_destroyed}/{len(destroy)} destroyed ({_num_skipped} skipped)")
 
 
-def print_policy_result(keep: Collection[Snapshot], destroy: Collection[Snapshot], *, group: GroupInfo | None):
+def print_policy_result[G](keep: Collection[Snapshot], destroy: Collection[Snapshot], *, group: GroupInfo[G] | None):
   # Determine prefix
   if group is None:
     prefix = ""

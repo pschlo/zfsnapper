@@ -6,7 +6,8 @@ import logging
 
 from .args import Args
 from zfsnappr.common.zfs import Snapshot, ZfsCli
-from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
+from zfsnappr.common.filter import SnapFilter
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
 
 
@@ -24,17 +25,18 @@ class Field:
 
 def entrypoint(args: Args) -> None:
   resolved = resolve_dataset_args(args)
+  filter = resolve_filter_args(tag_groups=args.tag)
 
   # For each dataset, get all snapshots non-recursively
   for i, (conn, (datasets, cli)) in enumerate(resolved.items()):
     log.info(f"Location: {conn}")
-    list_conn(cli=cli, datasets=datasets, filter_tags=args.tag)
+    list_conn(cli=cli, datasets=datasets, filter=filter)
     if i < len(resolved)-1:
       log.info("")
 
 
-def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter_tags: Collection[str]):
-    snaps = fetch_snaps(cli, datasets, filter_tags=filter_tags)
+def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter):
+    snaps = fetch_snaps(cli, datasets, filter=filter)
     if not snaps:
         log.info(f"No matching snapshots, nothing to do")
         return
