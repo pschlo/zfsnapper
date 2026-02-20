@@ -6,6 +6,7 @@ from .resolve_paths import resolve_paths
 from .path import Path
 from .parse_dataset_spec import parse_dataset_spec, ConnSpec
 from .utils import group_by
+from .sort import sort_conns
 
 
 @dataclass
@@ -63,7 +64,12 @@ def resolve_datasets(
         raise ValueError(f"No dataset locations specified")
     if diff := exc_conns - inc_conns:
         raise ValueError(f"Location '{next(iter(diff))}' is only used for exclusion")
-    clis = {c: create_zfs_cli(c) for c in inc_conns}
+    
+    # Sort conns for determinism
+    conns = sort_conns(inc_conns)
+
+    # Create CLIs
+    clis = {c: create_zfs_cli(c) for c in conns}
 
     # For each conn, determine include/exclude policy.
     policies = {
@@ -73,7 +79,7 @@ def resolve_datasets(
             exclude_exact=set(_exclude_exact_parsed.get(conn, [])),
             exclude_recurse=set(_exclude_recurse_parsed.get(conn, []))
         )
-        for conn in inc_conns
+        for conn in conns
     }
 
     # For each conn, apply its policy.

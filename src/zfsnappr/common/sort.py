@@ -2,6 +2,7 @@ from collections.abc import Collection
 from typing import cast
 
 from zfsnappr.common.zfs import Snapshot, Dataset
+from zfsnappr.common.parse_dataset_spec import ConnSpec
 from zfsnappr.common.path import Path
 
 
@@ -27,3 +28,14 @@ def sort_datasets(datasets: Collection[Dataset] | Collection[Path], reverse: boo
 def dataset_sortkey(dataset: Dataset | Path | str):
     path = dataset.path if isinstance(dataset, Dataset) else Path(dataset)
     return (path.depth, path)
+
+
+def sort_conns(conns: Collection[ConnSpec], reverse: bool = False):
+    return sorted(
+        conns,
+        key=conn_sortkey,
+        reverse=reverse
+    )
+
+def conn_sortkey(conn: ConnSpec):
+    return (conn.host, conn.user, conn.port)

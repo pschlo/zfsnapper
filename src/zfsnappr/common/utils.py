@@ -15,6 +15,7 @@ def group_by[Group: Hashable, Item](
 
 
 def combine_dicts[K, V1, V2](dict1: dict[K, V1], dict2: dict[K, V2]) -> dict[K, tuple[V1, V2]]:
+    """Keys are ordered as in `dict1`."""
     keys = dict1.keys()
     assert dict2.keys() == keys
     return {k: (dict1[k], dict2[k]) for k in keys}
