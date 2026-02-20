@@ -9,8 +9,6 @@ from .args import Args
 
 log = logging.getLogger(__name__)
 
-TAG_SEPARATOR = "_"
-
 
 def entrypoint(args: Args) -> None:
   version = importlib.metadata.version('zfsnappr')

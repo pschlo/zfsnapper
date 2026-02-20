@@ -2,7 +2,7 @@ from collections.abc import Collection
 from typing import cast
 
 from zfsnappr.common.zfs import Snapshot, Dataset
-from .resolve_paths import Path
+from zfsnappr.common.path import Path
 
 
 def sort_snaps_by_time(snaps: Collection[Snapshot], reverse: bool = False) -> list[Snapshot]:

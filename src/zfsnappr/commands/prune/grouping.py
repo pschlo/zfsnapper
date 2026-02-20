@@ -3,7 +3,7 @@ from collections.abc import Callable, Collection
 from dataclasses import dataclass
 
 from zfsnappr.common.zfs import Snapshot
-from zfsnappr.common.resolve_paths import Path
+from zfsnappr.common.path import Path
 from zfsnappr.common.sort import dataset_sortkey
 from zfsnappr.common.utils import group_by, sort_dict
 

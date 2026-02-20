@@ -9,7 +9,7 @@ from itertools import batched
 from enum import StrEnum
 import logging
 
-from zfsnappr.common.resolve_paths import Path
+from .path import Path
 
 
 log = logging.getLogger(__name__)

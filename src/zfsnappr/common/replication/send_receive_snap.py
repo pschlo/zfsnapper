@@ -5,7 +5,7 @@ import threading
 import time
 
 from ..zfs import ZfsCli, Snapshot, ZfsProperty, Dataset, ZfsDatasetType
-from zfsnappr.common.exception import ReplicationError
+from zfsnappr.common.replication.exception import ReplicationError
 
 Holdtag = Union[str, Callable[[Dataset],str]]
 

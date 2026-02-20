@@ -2,7 +2,8 @@ from dataclasses import dataclass
 from collections.abc import Collection
 
 from .zfs import ZfsCli, Dataset, RemoteZfsCli, LocalZfsCli
-from .resolve_paths import resolve_paths, Path
+from .resolve_paths import resolve_paths
+from .path import Path
 from .parse_dataset_spec import parse_dataset_spec, ConnSpec
 from .utils import group_by
 

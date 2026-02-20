@@ -5,7 +5,7 @@ import logging
 from ..zfs import Snapshot, ZfsCli
 from ..utils import group_by
 from .replicate_snaps import replicate_snaps
-from zfsnappr.common.exception import ReplicationError
+from zfsnappr.common.replication.exception import ReplicationError
 
 
 log = logging.getLogger(__name__)

@@ -6,7 +6,7 @@ from itertools import pairwise
 
 from ..zfs import Snapshot, ZfsCli, ZfsProperty, Dataset
 from .send_receive_snap import send_receive_incremental, send_receive_initial
-from zfsnappr.common.exception import ReplicationError
+from zfsnappr.common.replication.exception import ReplicationError
 from zfsnappr.common.sort import sort_snaps_by_time
 
 

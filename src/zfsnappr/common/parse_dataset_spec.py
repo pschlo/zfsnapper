@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import string
-from .resolve_paths import Path
+from .path import Path
 
 
 @dataclass(frozen=True, eq=True)
