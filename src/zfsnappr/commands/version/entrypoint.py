@@ -11,5 +11,5 @@ log = logging.getLogger(__name__)
 
 
 def entrypoint(args: Args) -> None:
-  version = importlib.metadata.version('zfsnappr')
-  log.info(f"zfsnappr {version}")
+    version = importlib.metadata.version('zfsnappr')
+    log.info(f"zfsnappr {version}")

@@ -7,32 +7,32 @@ from .zfs import Snapshot
 
 @dataclass
 class SnapFilter:
-  """
-  A snapshot passes the filter if it passes every subfilter.
+    """
+    A snapshot passes the filter if it passes every subfilter.
 
-  By default, all subfilters are disabled and every snapshot passes the filter.
-  """
+    By default, all subfilters are disabled and every snapshot passes the filter.
+    """
 
-  tag_groups: Collection[Collection[str]] | None = None
-  """Collection of tag groups.
-  A snap passes the tag subfilter if for any tag group it has all the tags in the group.
-  
-  If `None` (default), tag filtering is disabled.
-  """
+    tag_groups: Collection[Collection[str]] | None = None
+    """Collection of tag groups.
+    A snap passes the tag subfilter if for any tag group it has all the tags in the group.
+    
+    If `None` (default), tag filtering is disabled.
+    """
 
-  datasets: Collection[str] | None = None
-  """Collection of dataset paths.
-  A snap passes the dataset subfilter if its dataset path is in the collection.
+    datasets: Collection[str] | None = None
+    """Collection of dataset paths.
+    A snap passes the dataset subfilter if its dataset path is in the collection.
 
-  If `None` (default), dataset filtering is disabled.
-  """
+    If `None` (default), dataset filtering is disabled.
+    """
 
-  shortnames: Collection[str] | None = None
-  """Collection of shortnames.
-  A snap passes the shortname subfilter if its name is in the collection.
+    shortnames: Collection[str] | None = None
+    """Collection of shortnames.
+    A snap passes the shortname subfilter if its name is in the collection.
 
-  If `None` (default), shortname filtering is disabled.
-  """
+    If `None` (default), shortname filtering is disabled.
+    """
 
 
 def filter_snaps(snapshots: Collection[Snapshot], filter: SnapFilter) -> list[Snapshot]:
