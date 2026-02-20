@@ -20,7 +20,7 @@ class Args(CommonArgs):
 
 
 def setup(parser: ArgumentParser) -> None:
-  parser.add_argument('--tag', type=str, action='append', default=[])
+  parser.add_argument('-t', '--tag', type=str, action='append', default=[])
 
   group = parser.add_mutually_exclusive_group()
   group.add_argument('--set-from-prop', metavar='PROP')

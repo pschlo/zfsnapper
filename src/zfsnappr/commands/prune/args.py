@@ -53,7 +53,7 @@ WITHIN_OPTS = [
 
 def setup(parser: ArgumentParser) -> None:
   # filter snapshots by tag
-  parser.add_argument('--tag', type=str, action='append', default=[])
+  parser.add_argument('-t', '--tag', type=str, action='append', default=[])
 
   # keep policy arguments
   for opt in COUNT_OPTS:
