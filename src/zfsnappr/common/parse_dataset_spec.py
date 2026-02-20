@@ -54,7 +54,7 @@ def parse_dataset_spec(raw_spec: str):
   # Dataset may be empty string.
   _parts = raw_spec.split('/', maxsplit=1)
   if len(_parts) == 1:
-    _netloc, dataset = _parts[0], ""
+    _netloc, dataset = _parts[0] or None, ""
   elif len(_parts) == 2:
     _netloc, dataset = _parts[0] or None, _parts[1]
   else:

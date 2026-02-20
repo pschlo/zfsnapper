@@ -5,7 +5,8 @@ import logging
 
 from zfsnappr.common.zfs import ZfsProperty, Snapshot, ZfsCli
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
-from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args
+from zfsnappr.common.filter import SnapFilter
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
 from .args import Args
 
 
@@ -21,6 +22,7 @@ type Operation = tuple[
 
 def entrypoint(args: Args) -> None:
   resolved = resolve_dataset_args(args)
+  filter = resolve_filter_args(tag_groups=args.tag, shortnames=args.snapshot)
 
   # --- determine operations ---
   operations: list[Operation] = []
@@ -53,8 +55,7 @@ def entrypoint(args: Args) -> None:
       datasets=datasets,
       operations=operations,
       fetch_props=[p for p in [args.add_from_prop, args.set_from_prop] if p is not None],
-      filter_tags=args.tag,
-      filter_snaps=args.snapshot
+      filter=filter
     )
 
 
@@ -63,11 +64,10 @@ def tag_conn(
   datasets: ResolvedDatasets,
   operations: list[Operation],
   fetch_props: Collection[str],
-  filter_tags: Collection[str],
-  filter_snaps: Collection[str]
+  filter: SnapFilter
 ):
   # --- get snapshots ---
-  snaps = fetch_snaps(cli, datasets, props=fetch_props, filter_tags=filter_tags, filter_snaps=filter_snaps)
+  snaps = fetch_snaps(cli, datasets, props=fetch_props, filter=filter)
   if not snaps:
       log.info(f"No matching snapshots, nothing to do")
       return
