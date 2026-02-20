@@ -50,7 +50,12 @@ def entrypoint(args: Args):
   resolved = resolve_dataset_args(args)
   filter = resolve_filter_args(tag_groups=args.tag, shortnames=args.snapshot)
 
-  for i, (conn, (datasets, cli)) in enumerate(resolved.items()):
+  _first = True
+  for conn, (datasets, cli) in resolved.items():
+    if not _first:
+      log.info("")
+    _first = False
+
     log.info(f"Location: {conn}")
     prune_conn(
        cli=cli,
@@ -60,8 +65,6 @@ def entrypoint(args: Args):
        filter=filter,
        dry_run=args.dry_run,
     )
-    if i < len(resolved)-1:
-      log.info("")
 
 
 def prune_conn(

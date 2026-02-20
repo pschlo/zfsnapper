@@ -28,17 +28,20 @@ def entrypoint(args: Args) -> None:
   filter = resolve_filter_args(tag_groups=args.tag)
 
   # For each dataset, get all snapshots non-recursively
-  for i, (conn, (datasets, cli)) in enumerate(resolved.items()):
+  _first = True
+  for conn, (datasets, cli) in resolved.items():
+    if not _first:
+      log.info("")
+    _first = False
+
     log.info(f"Location: {conn}")
     list_conn(cli=cli, datasets=datasets, filter=filter)
-    if i < len(resolved)-1:
-      log.info("")
 
 
 def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter):
     snaps = fetch_snaps(cli, datasets, filter=filter)
     if not snaps:
-        log.info(f"No matching snapshots, nothing to do")
+        log.info(f"No matching snapshots")
         return
 
     # get hold tags for all snapshots with holds

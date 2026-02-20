@@ -57,14 +57,13 @@ def resolve_datasets(
     _exclude_recurse_parsed = parse_dataset_specs(exclude_recurse)
 
     # Collect all appearing connections.
-    # Do not limit to included-only, so that we can later throw error if a conn did not yield paths.
-    conns = (
-      _include_exact_parsed.keys()
-      | _include_recurse_parsed.keys()
-      | _exclude_exact_parsed.keys()
-      | _exclude_recurse_parsed.keys()
-    )
-    clis = {c: create_zfs_cli(c) for c in conns}
+    inc_conns = _include_exact_parsed.keys() | _include_recurse_parsed.keys()
+    exc_conns = _exclude_exact_parsed.keys() | _exclude_recurse_parsed.keys()
+    if not inc_conns:
+      raise ValueError(f"No dataset locations specified")
+    if diff := exc_conns - inc_conns:
+      raise ValueError(f"Location '{next(iter(diff))}' is only used for exclusion")
+    clis = {c: create_zfs_cli(c) for c in inc_conns}
 
     # For each conn, determine include/exclude policy.
     policies = {
@@ -74,7 +73,7 @@ def resolve_datasets(
           exclude_exact=set(_exclude_exact_parsed.get(conn, [])),
           exclude_recurse=set(_exclude_recurse_parsed.get(conn, []))
        )
-       for conn in conns
+       for conn in inc_conns
     }
 
     # For each conn, apply its policy.

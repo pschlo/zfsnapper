@@ -49,7 +49,13 @@ def entrypoint(args: Args) -> None:
     return
 
   # Apply tag command to each connection
-  for i, (conn, (datasets, cli)) in enumerate(resolved.items()):
+  _first = True
+  for conn, (datasets, cli) in resolved.items():
+    if not _first:
+      log.info("")
+    _first = False
+
+    log.info(f"Location: {conn}")
     tag_conn(
       cli=cli,
       datasets=datasets,

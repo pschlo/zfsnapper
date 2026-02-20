@@ -212,11 +212,11 @@ def determine_latest_common(snaps: tuple[list[Snapshot],list[Snapshot]]) -> tupl
   return latest_common_snap
 
 
-def _release_holds(clis: tuple[ZfsCli, ZfsCli], snaps: tuple[list[str], list[str]], release_holdtags: tuple[str, str], current_holdtags: tuple[dict[str, set[str]], dict[str, set[str]]], datasets: tuple[str, str]):
+def _release_holds(clis: tuple[ZfsCli, ZfsCli], snaps_longnames: tuple[list[str], list[str]], release_holdtags: tuple[str, str], current_holdtags: tuple[dict[str, set[str]], dict[str, set[str]]], datasets: tuple[str, str]):
   # Filter for snaps that have the holdtags
   release_snaps = (
-    [s for s in snaps[0] if release_holdtags[0] in current_holdtags[0][s]],
-    [s for s in snaps[1] if release_holdtags[1] in current_holdtags[1][s]],
+    [s for s in snaps_longnames[0] if release_holdtags[0] in current_holdtags[0][s]],
+    [s for s in snaps_longnames[1] if release_holdtags[1] in current_holdtags[1][s]],
   )
   if release_snaps[0]:
     log.info(f"Releasing {len(release_snaps[0])} obsolete holds in source '{datasets[0]}'")
