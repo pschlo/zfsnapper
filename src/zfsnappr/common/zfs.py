@@ -9,6 +9,8 @@ from itertools import batched
 from enum import StrEnum
 import logging
 
+from zfsnappr.common.resolve_paths import Path
+
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +42,7 @@ REQUIRED_PROPS = [ZfsProperty.NAME, ZfsProperty.CREATION, ZfsProperty.GUID, ZfsP
 class Snapshot:
   properties: dict[str, str]
 
-  dataset: str
+  dataset: Path
   shortname: str
   guid: int
   timestamp: datetime
@@ -52,7 +54,8 @@ class Snapshot:
     ps = properties
 
     self.properties = ps
-    self.dataset, self.shortname = ps[P.NAME].split('@')
+    dataset_name, self.shortname = ps[P.NAME].split('@')
+    self.dataset = Path(dataset_name)
     self.guid = int(ps[P.GUID])
     self.timestamp = datetime.fromtimestamp(int(ps[P.CREATION]))
     self.holds = int(ps[P.USERREFS])
@@ -88,7 +91,7 @@ class Pool:
 class Dataset:
   properties: dict[str, str]
 
-  name: str
+  path: Path
   guid: int
   type: ZfsDatasetType
 
@@ -97,7 +100,7 @@ class Dataset:
     ps = properties
 
     self.properties = ps
-    self.name = ps[P.NAME]
+    self.path = Path(ps[P.NAME])
     self.guid = int(ps[P.GUID])
     self.type = ZfsDatasetType(ps[P.TYPE])
 
@@ -131,11 +134,11 @@ class ZfsCli(ABC):
     cmd += [snapshot_fullname]
     return self._start_command(cmd, stdout=PIPE, stderr=PIPE)
 
-  def receive_snapshot_async(self, dataset: str, stdin: IO[bytes], properties: dict[str, str] = {}) -> Popen[bytes]:
+  def receive_snapshot_async(self, dataset: Path | str, stdin: IO[bytes], properties: dict[str, str] = {}) -> Popen[bytes]:
     cmd = ['zfs', 'receive', '-u']
     for property, value in properties.items():
       cmd += ['-o', f'{property}={value}']
-    cmd += [dataset]
+    cmd += [str(dataset)]
     return self._start_command(cmd, stdin=stdin)
 
   # TrueNAS CORE 13.0 does not support holds -p, so we do not fetch timestamp
@@ -179,44 +182,49 @@ class ZfsCli(ABC):
       return
     self._run_text_command(['zfs', 'release', tag, *snapshots_fullnames])
 
-  def get_pool_from_dataset(self, dataset: str) -> Pool:
-    name = dataset.split('/')[0]
+  def get_pool_from_dataset(self, dataset: Path | str) -> Pool:
+    name = str(dataset).split('/')[0]
     guid = self._run_text_command(['zpool', 'get', '-Hp', '-o', 'value', 'guid', name])
     return Pool(name=name, guid=int(guid))
   
-  def get_datasets(self, names: Collection[str], properties: Collection[str] = []) -> list[Dataset]:
-    if not names:
+  def get_datasets(self, paths: Collection[Path | str], properties: Collection[str] = []) -> list[Dataset]:
+    if not paths:
       return []
     properties = list(dict.fromkeys(REQUIRED_PROPS + list(properties)))  # eliminate duplicates
-    
-    cmd = ['zfs', 'get', '-Hp', '-o', 'value', ','.join(properties), *names]
+
+    cmd: list[str] = ['zfs', 'get', '-Hp', '-o', 'value', ','.join(properties), *(str(p) for p in paths)]
     lines = self._run_text_command(cmd).splitlines()
 
     datasets: list[Dataset] = []
-    for i in range(len(names)):
+    for i in range(len(paths)):
       props = {p: v for p, v in zip(properties, lines[i*len(properties):(i+1)*len(properties)])}
       datasets.append(Dataset(props))
     return datasets
 
 
-  def get_dataset(self, name: str, properties: Collection[str] = []) -> Dataset:
+  def get_dataset(self, path: Path | str, properties: Collection[str] = []) -> Dataset:
     """Shorthand method"""
-    return next(iter(self.get_datasets([name], properties)))
+    return next(iter(self.get_datasets([path], properties)))
 
 
   def get_all_datasets(
     self,
-    datasets: Collection[str] | None = None,
+    paths: Collection[Path | str] | None = None,
     recursive: bool = False,
     properties: Collection[str] = []
   ) -> list[Dataset]:
+    """If `paths` is not `None`, only fetch these datasets."""
+    if paths is not None and not paths:
+        # Empty paths container
+        return []
     properties = list(dict.fromkeys(REQUIRED_PROPS + list(properties)))  # eliminate duplicates
 
     cmd = ['zfs', 'list', '-Hp', '-o', ','.join(properties)]
     if recursive:
       cmd += ['-r']
-    if datasets is not None:
-      cmd += list(datasets)
+    if paths is not None:
+      assert paths
+      cmd += [str(p) for p in paths]
     lines = self._run_text_command(cmd).splitlines()
 
     _datasets: list[Dataset] = []
@@ -255,13 +263,11 @@ class ZfsCli(ABC):
 
   def get_all_snapshots(
     self,
-    datasets: Collection[str] | None = None,
+    datasets: Collection[Path | str] | None = None,
     recursive: bool = False,
-    exclude_datasets: Collection[str] | None = None,
     properties: Collection[str] = [],
   ) -> list[Snapshot]:
     properties = list(dict.fromkeys(REQUIRED_PROPS + list(properties)))  # eliminate duplicates
-    exclude_datasets = set(exclude_datasets) if exclude_datasets else set()
     if datasets is not None and not datasets:
       # empty dataset container
       return []
@@ -270,16 +276,14 @@ class ZfsCli(ABC):
     if recursive:
       cmd += ['-r']
     if datasets is not None:
-      cmd += list(datasets)
+      assert datasets
+      cmd += [str(p) for p in datasets]
     lines = self._run_text_command(cmd).splitlines()
 
     snapshots: list[Snapshot] = []
     for line in lines:
       props = {p: v for p, v in zip(properties, line.split('\t'))}
       snapshots.append(Snapshot(props))
-
-    # Filter snapshots
-    snapshots = [s for s in snapshots if s.dataset not in exclude_datasets]
 
     return snapshots
 
@@ -288,7 +292,7 @@ class ZfsCli(ABC):
     cmd = ['zfs', 'set', f"{ZfsProperty.CUSTOM_TAGS}={','.join(tags)}", snap_fullname]
     self._run_text_command(cmd)
 
-  def destroy_snapshots(self, dataset: str, snapshots_shortnames: Collection[str]) -> None:
+  def destroy_snapshots(self, dataset: Path | str, snapshots_shortnames: Collection[str]) -> None:
     if not snapshots_shortnames:
       return
     shortnames_str = ','.join(snapshots_shortnames)

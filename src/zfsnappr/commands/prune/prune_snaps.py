@@ -1,48 +1,52 @@
 from typing import Optional, Any
 from collections.abc import Collection
+from dataclasses import dataclass
 from subprocess import CalledProcessError
 import logging
 
 from zfsnappr.common.zfs import Snapshot, ZfsCli
 from .policy import apply_policy, KeepPolicy
-from zfsnappr.common.utils import group_by as _groupby, sort_dict
-from .grouping import GroupType, GET_GROUP
-from zfsnappr.common.sort import dataset_sortkey
+from .grouping import Grouper, groupers, apply_grouper
 
 
 log = logging.getLogger(__name__)
 
 
-def prune_snapshots(
+@dataclass
+class GroupInfo[G]:
+  groupkey: G
+  """The key of a specific group."""
+  grouper: Grouper[G]
+  """Grouper that was used to create the group."""
+
+
+def prune_snapshots[G](
   cli: ZfsCli,
   snapshots: Collection[Snapshot],
   policy: KeepPolicy,
   *,
-  group_by: Optional[GroupType] = GroupType.DATASET,
-  dry_run: bool = True,
+  grouper: Grouper[G] | None,
+  dry_run: bool,
   allow_destroy_all: bool = False
 ) -> None:
   """
   Prune given snapshots according to keep policy
   """
-  if group_by is None:
+  if grouper is None:
     log.info(f'Pruning {len(snapshots)} snapshots without grouping')
     keep, destroy = apply_policy(snapshots, policy)
-    print_policy_result(keep, destroy, group=None, group_by=None)
+    print_policy_result(keep, destroy, group=None)
   else:
-    log.info(f'Pruning {len(snapshots)} snapshots, grouped by {group_by.value}')
+    log.info(f'Pruning {len(snapshots)} snapshots, grouped by {grouper.name}')
     # group the snapshots. Result is a dict with group name as key and set of snaps as value
-    groups = sort_dict(
-      _groupby(snapshots, key=GET_GROUP[group_by]),
-      key=dataset_sortkey
-    )
+    groups = apply_grouper(snapshots, grouper)
     keep: list[Snapshot] = []
     destroy: list[Snapshot] = []
-    for _group, _snaps in groups.items():
-      _keep, _destroy = apply_policy(_snaps, policy)
+    for groupkey, group_snaps in groups.items():
+      _keep, _destroy = apply_policy(group_snaps, policy)
       keep += _keep
       destroy += _destroy
-      print_policy_result(_keep, _destroy, group=_group, group_by=group_by)
+      print_policy_result(_keep, _destroy, group=GroupInfo(groupkey, grouper))
 
   if not keep and not allow_destroy_all:
     raise RuntimeError(f"Refusing to destroy all snapshots")
@@ -65,14 +69,12 @@ def prune_snapshots(
     log.info(f"    {_num_destroyed}/{len(destroy)} destroyed ({_num_skipped} skipped)")
 
 
-def print_policy_result(keep: Collection[Snapshot], destroy: Collection[Snapshot], *, group: str | None = None, group_by: GroupType | None = None):
-  assert bool(group) == bool(group_by)
-
+def print_policy_result(keep: Collection[Snapshot], destroy: Collection[Snapshot], *, group: GroupInfo | None):
   # Determine prefix
-  if group is None or group_by is None:
+  if group is None:
     prefix = ""
   else:
-    prefix = f"{group_by.value.capitalize()} '{group}': "
+    prefix = f"{group.grouper.name.capitalize()} '{group.groupkey}': "
 
   # Print message
   if not destroy:

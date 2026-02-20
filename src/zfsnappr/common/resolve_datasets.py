@@ -1,38 +1,18 @@
-from typing import Callable, Optional, Literal, cast
 from dataclasses import dataclass
 from collections.abc import Collection
 
 from .zfs import ZfsCli, Dataset, RemoteZfsCli, LocalZfsCli
-from .resolve_paths import resolve_paths
-from .parse_dataset_spec import parse_dataset_spec
-from .args import CommonArgs
-from .utils import group_by, combine_dicts
-
-
-@dataclass(frozen=True, eq=True)
-class ConnSpec:
-  host: str | None
-  user: str | None
-  port: int | None
-
-  def __str__(self) -> str:
-    if self.host is None:
-      return "local"
-
-    res = self.host
-    if self.user:
-      res = f"{self.user}@{res}"
-    if self.port:
-      res = f"{res}:{self.port}"
-    return res
+from .resolve_paths import resolve_paths, Path
+from .parse_dataset_spec import parse_dataset_spec, ConnSpec
+from .utils import group_by
 
 
 @dataclass
 class Policy:
-   include_exact: set[str | None]
-   include_recurse: set[str | None]
-   exclude_exact: set[str | None]
-   exclude_recurse: set[str | None]
+   include_exact: set[Path]
+   include_recurse: set[Path]
+   exclude_exact: set[Path]
+   exclude_recurse: set[Path]
 
 
 @dataclass
@@ -53,9 +33,10 @@ def create_zfs_cli(conn: ConnSpec) -> ZfsCli:
     return LocalZfsCli()
 
 
-def parse_dataset_specs(raw_specs: Collection[str]) -> dict[ConnSpec, list[str | None]]:
+def parse_dataset_specs(raw_specs: Collection[str]) -> dict[ConnSpec, list[Path]]:
+  """Dataset path may be empty path."""
   specs = [parse_dataset_spec(spec) for spec in raw_specs]
-  groups = group_by(specs, key=lambda s: ConnSpec(host=s.host, user=s.user, port=s.port))
+  groups = group_by(specs, key=lambda s: s.conn)
   return {conn: [s.dataset for s in _specs] for conn, _specs in groups.items()}
 
 
@@ -74,8 +55,17 @@ def resolve_datasets(
     _exclude_exact_parsed = parse_dataset_specs(exclude_exact)
     _exclude_recurse_parsed = parse_dataset_specs(exclude_recurse)
 
-    conns = _include_exact_parsed.keys() | _include_recurse_parsed.keys()
+    # Collect all appearing connections.
+    # Do not limit to included-only, so that we can later throw error if a conn did not yield paths.
+    conns = (
+      _include_exact_parsed.keys()
+      | _include_recurse_parsed.keys()
+      | _exclude_exact_parsed.keys()
+      | _exclude_recurse_parsed.keys()
+    )
     clis = {c: create_zfs_cli(c) for c in conns}
+
+    # For each conn, determine include/exclude policy.
     policies = {
        conn: Policy(
           include_exact=set(_include_exact_parsed.get(conn, [])),
@@ -86,37 +76,38 @@ def resolve_datasets(
        for conn in conns
     }
 
+    # For each conn, apply its policy.
     datasets: dict[ConnSpec, ResolvedDatasets] = {}
     for conn, policy in policies.items():
         all_datasets: list[Dataset] = clis[conn].get_all_datasets()
-        path_to_dataset: dict[str, Dataset] = {d.name: d for d in all_datasets}
+        path_to_dataset: dict[Path, Dataset] = {d.path: d for d in all_datasets}
 
         # Resolve dataset paths
         resolved_paths = resolve_paths(
-           all_datasets=[d.name for d in all_datasets],
-           included_exact=[d or "" for d in policy.include_exact],
-           included_recurse=[d or "" for d in policy.include_recurse],
-           excluded_exact=[d or "" for d in policy.exclude_exact],
-           excluded_recurse=[d or "" for d in policy.exclude_recurse],
+           all_paths=[d.path for d in all_datasets],
+           included_exact=policy.include_exact,
+           included_recurse=policy.include_recurse,
+           excluded_exact=policy.exclude_exact,
+           excluded_recurse=policy.exclude_recurse,
            conservative_grouping=strict,
            strict_exclude=strict
         )
 
         # Ensure there are kept datasets
-        if not resolved_paths.kept_datasets:
+        if not resolved_paths.kept_paths:
            raise ValueError(f"Resolving datasets for location '{conn}' yielded no datasets")
 
         # Ensure all explicitly included datasets are kept, to avoid surprises
         for d in policy.include_exact:
-           if d and d not in resolved_paths.kept_datasets:
+           if d and d not in resolved_paths.kept_paths:
               raise ValueError(f"Dataset '{conn}/{d}' is no longer included in resolved datasets")
 
         # Reconstruct datasets
         resolved_datasets = ResolvedDatasets(
-           kept_datasets={path_to_dataset[d] for d in resolved_paths.kept_datasets},
-           single_datasets={path_to_dataset[d] for d in resolved_paths.single_datasets},
+           kept_datasets={path_to_dataset[p] for p in resolved_paths.kept_paths},
+           single_datasets={path_to_dataset[p] for p in resolved_paths.single_paths},
            # In ZFS, parents must exist, so this is safe
-           recursive_groups={path_to_dataset[d] for d in resolved_paths.recursive_groups}
+           recursive_groups={path_to_dataset[p] for p in resolved_paths.recursive_groups}
         )
 
         datasets[conn] = resolved_datasets

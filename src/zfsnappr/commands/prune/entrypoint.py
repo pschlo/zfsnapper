@@ -9,7 +9,7 @@ from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args
 
 from .policy import KeepPolicy
 from .prune_snaps import prune_snapshots
-from .grouping import GroupType
+from .grouping import groupers, Grouper
 if TYPE_CHECKING:
   from .args import Args
 
@@ -37,6 +37,15 @@ def entrypoint(args: Args):
     tags = frozenset(args.keep_tag)
   )
 
+  # Determine grouper
+  grouper: Grouper | None
+  if args.group_by == 'dataset':
+     grouper = groupers.DATASET
+  elif args.group_by == '':
+     grouper = None
+  else:
+     assert False
+
   resolved = resolve_dataset_args(args)
   for i, (conn, (datasets, cli)) in enumerate(resolved.items()):
     log.info(f"Location: {conn}")
@@ -44,9 +53,9 @@ def entrypoint(args: Args):
        cli=cli,
        datasets=datasets,
        policy=policy,
+       grouper=grouper,
        filter_tags=args.tag,
        filter_snaps=args.snapshot,
-       groupby=args.group_by,
        dry_run=args.dry_run,
     )
     if i < len(resolved)-1:
@@ -57,9 +66,9 @@ def prune_conn(
     cli: ZfsCli,
     datasets: ResolvedDatasets,
     policy: KeepPolicy,
+    grouper: Grouper | None,
     filter_tags: Collection[str],
     filter_snaps: Collection[str],
-    groupby: str,
     dry_run: bool
 ):
     # Fetch all snapshots for all datasets
@@ -68,16 +77,11 @@ def prune_conn(
         log.info(f"No matching snapshots, nothing to do")
         return
 
-    get_grouptype: dict[str, Optional[GroupType]] = {
-        'dataset': GroupType.DATASET,
-        '': None
-    }
-
     prune_snapshots(
         cli,
         snaps,
         policy,
         dry_run=dry_run,
-        group_by=get_grouptype[groupby],
+        grouper=grouper,
         allow_destroy_all=bool(filter_snaps)  # only allow if specific snapshots were passed
     )

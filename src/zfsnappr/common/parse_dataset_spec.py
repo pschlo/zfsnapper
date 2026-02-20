@@ -1,13 +1,30 @@
 from dataclasses import dataclass
 import string
+from .resolve_paths import Path
+
+
+@dataclass(frozen=True, eq=True)
+class ConnSpec:
+  host: str | None
+  user: str | None
+  port: int | None
+
+  def __str__(self) -> str:
+    if self.host is None:
+      return "local"
+
+    res = self.host
+    if self.user:
+      res = f"{self.user}@{res}"
+    if self.port:
+      res = f"{res}:{self.port}"
+    return res
 
 
 @dataclass(frozen=True)
 class DatasetSpec:
-  user: str | None
-  host: str | None
-  port: int | None
-  dataset: str | None
+  conn: ConnSpec
+  dataset: Path
 
 
 class DatasetParseError(Exception):
@@ -22,22 +39,24 @@ def is_alnum(value: str):
 
 
 def parse_dataset_spec(raw_spec: str):
+  """Dataset path may be empty path."""
   user: str | None
   host: str | None
   port: int | None
-  dataset: str | None
+  dataset: str
 
   # value = netloc/dataset
   # netloc = user@hostport
   # hostport = host:port
   # value_resolved = user@host:port/dataset
 
-  # split dataset path from domain/netloc
+  # Split dataset path from domain/netloc.
+  # Dataset may be empty string.
   _parts = raw_spec.split('/', maxsplit=1)
   if len(_parts) == 1:
-    _netloc, dataset = _parts[0], None
+    _netloc, dataset = _parts[0], ""
   elif len(_parts) == 2:
-    _netloc, dataset = _parts[0] or None, _parts[1] or None
+    _netloc, dataset = _parts[0] or None, _parts[1]
   else:
     assert False
 
@@ -74,10 +93,13 @@ def parse_dataset_spec(raw_spec: str):
     not dataset or all(map(is_alnum, dataset.split('/')))
   ]):
     raise DatasetParseError(raw_spec)
-
-  return DatasetSpec(
+  
+  conn = ConnSpec(
     user=user,
     host=host,
-    port=port,
-    dataset=dataset
+    port=port
+  )
+  return DatasetSpec(
+    conn=conn,
+    dataset=Path(dataset)
   )

@@ -43,7 +43,7 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter_tags: Collection[s
     holdtags = cli.get_holdtags([s.longname for s in snaps], userrefs={s.longname: s.holds for s in snaps})
 
     fields: list[Field] = [
-      Field('DATASET',    lambda s: s.dataset),
+      Field('DATASET',    lambda s: str(s.dataset)),
       Field('SHORT NAME', lambda s: s.shortname),
       Field('TAGS',       lambda s: ','.join(s.tags) if s.tags is not None else 'UNSET'),
       Field('TIMESTAMP',  lambda s: str(s.timestamp)),

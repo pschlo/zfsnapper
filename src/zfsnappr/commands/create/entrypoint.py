@@ -36,7 +36,7 @@ def entrypoint(args: Args) -> None:
 
 def create_snapshot(conn: ConnSpec, cli: ZfsCli, dataset: Dataset, filter_tags: Collection[str], recurse: bool):
   shortname = generate_random_name()
-  fullname = f'{dataset.name}@{shortname}'
+  fullname = f'{dataset.path}@{shortname}'
 
   cli.create_snapshot(
     fullname=fullname,
@@ -46,4 +46,4 @@ def create_snapshot(conn: ConnSpec, cli: ZfsCli, dataset: Dataset, filter_tags: 
     }
   )
 
-  log.info(f"Created{' recursive ' if recurse else ' '}snapshot of '{conn}/{dataset.name}': {shortname}")
+  log.info(f"Created{' recursive ' if recurse else ' '}snapshot of '{conn}/{dataset.path}': {shortname}")

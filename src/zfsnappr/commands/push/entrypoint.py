@@ -2,7 +2,9 @@ from __future__ import annotations
 import logging
 
 from zfsnappr.common.replication import replicate
-from zfsnappr.common.resolve_datasets import resolve_datasets
+from zfsnappr.common.resolve_datasets import ResolvedDatasets, create_zfs_cli
+from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps
+from zfsnappr.common.parse_dataset_spec import parse_dataset_spec
 from .args import Args
 
 
@@ -10,9 +12,9 @@ log = logging.getLogger(__name__)
 
 
 def entrypoint(args: Args) -> None:
-  source_cli, source_dataset = get_zfs_cli(args.dataset_spec)
-  if source_dataset is None:
-    raise ValueError(f"No dataset specified")
+  resolved = resolve_dataset_args(args)
+  dest_ds = parse_dataset_spec(args.dest)
+  dest_cli = create_zfs_cli()
 
   dest_cli, dest_dataset = get_zfs_cli(args.dest)
   if dest_dataset is None:
