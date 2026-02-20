@@ -10,17 +10,17 @@ from zfsnappr.common.utils import group_by, sort_dict
 
 @dataclass
 class Grouper[G]:
-  name: str
-  groupkey: Callable[[Snapshot], G]
-  sortkey: Callable[[G], Any] | None = None
+    name: str
+    groupkey: Callable[[Snapshot], G]
+    sortkey: Callable[[G], Any] | None = None
 
 
 class groupers:
-  DATASET = Grouper[Path](
-    name="dataset",
-    groupkey=lambda s: s.dataset,
-    sortkey=dataset_sortkey
-  )
+    DATASET = Grouper[Path](
+        name="dataset",
+        groupkey=lambda s: s.dataset,
+        sortkey=dataset_sortkey
+    )
   # TAG = Grouper[int](
   #   name="tag",
   #   groupkey=lambda s: 3,
@@ -29,7 +29,7 @@ class groupers:
 
 
 def apply_grouper[G](snaps: Collection[Snapshot], grouper: Grouper[G]) -> dict[G, list[Snapshot]]:
-  groups = group_by(snaps, grouper.groupkey)
-  if grouper.sortkey is not None:
-    groups = sort_dict(groups, key=grouper.sortkey)
-  return groups
+    groups = group_by(snaps, grouper.groupkey)
+    if grouper.sortkey is not None:
+        groups = sort_dict(groups, key=grouper.sortkey)
+    return groups

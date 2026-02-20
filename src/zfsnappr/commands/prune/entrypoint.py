@@ -12,59 +12,59 @@ from .policy import KeepPolicy
 from .prune_snaps import prune_snapshots
 from .grouping import groupers, Grouper
 if TYPE_CHECKING:
-  from .args import Args
+    from .args import Args
 
 
 log = logging.getLogger(__name__)
 
 
 def entrypoint(args: Args):
-  policy = KeepPolicy(
-    last = args.keep_last,
-    hourly = args.keep_hourly,
-    daily = args.keep_daily,
-    weekly = args.keep_weekly,
-    monthly = args.keep_monthly,
-    yearly = args.keep_yearly,
+    policy = KeepPolicy(
+        last = args.keep_last,
+        hourly = args.keep_hourly,
+        daily = args.keep_daily,
+        weekly = args.keep_weekly,
+        monthly = args.keep_monthly,
+        yearly = args.keep_yearly,
 
-    within = args.keep_within,
-    within_hourly = args.keep_within_hourly,
-    within_daily = args.keep_within_daily,
-    within_weekly = args.keep_within_weekly,
-    within_monthly = args.keep_within_monthly,
-    within_yearly = args.keep_within_yearly,
+        within = args.keep_within,
+        within_hourly = args.keep_within_hourly,
+        within_daily = args.keep_within_daily,
+        within_weekly = args.keep_within_weekly,
+        within_monthly = args.keep_within_monthly,
+        within_yearly = args.keep_within_yearly,
 
-    name = args.keep_name,
-    tags = frozenset(args.keep_tag)
-  )
-
-  # Determine grouper
-  grouper: Grouper | None
-  if args.group_by == 'dataset':
-     grouper = groupers.DATASET
-  elif args.group_by == '':
-     grouper = None
-  else:
-     assert False
-
-  resolved = resolve_dataset_args(args)
-  filter = resolve_filter_args(tag_groups=args.tag, shortnames=args.snapshot)
-
-  _first = True
-  for conn, (datasets, cli) in resolved.items():
-    if not _first:
-      log.info("")
-    _first = False
-
-    log.info(f"Location: {conn}")
-    prune_conn(
-       cli=cli,
-       datasets=datasets,
-       policy=policy,
-       grouper=grouper,
-       filter=filter,
-       dry_run=args.dry_run,
+        name = args.keep_name,
+        tags = frozenset(args.keep_tag)
     )
+
+    # Determine grouper
+    grouper: Grouper | None
+    if args.group_by == 'dataset':
+        grouper = groupers.DATASET
+    elif args.group_by == '':
+        grouper = None
+    else:
+        assert False
+
+    resolved = resolve_dataset_args(args)
+    filter = resolve_filter_args(tag_groups=args.tag, shortnames=args.snapshot)
+
+    _first = True
+    for conn, (datasets, cli) in resolved.items():
+        if not _first:
+            log.info("")
+        _first = False
+
+        log.info(f"Location: {conn}")
+        prune_conn(
+            cli=cli,
+            datasets=datasets,
+            policy=policy,
+            grouper=grouper,
+            filter=filter,
+            dry_run=args.dry_run,
+        )
 
 
 def prune_conn(

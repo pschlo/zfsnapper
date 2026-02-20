@@ -4,7 +4,7 @@ from zfsnappr.common.args import CommonArgs
 
 
 class Args(CommonArgs):
-  tag: list[str]
+    tag: list[str]
 
 
 def setup(parser: ArgumentParser) -> None:
