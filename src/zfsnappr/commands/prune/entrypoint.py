@@ -63,6 +63,7 @@ def entrypoint(args: Args):
             policy=policy,
             grouper=grouper,
             filter=filter,
+            allow_destroy_all=bool(args.snapshot),  # only allow if specific snapshots were passed
             dry_run=args.dry_run,
         )
 
@@ -73,6 +74,7 @@ def prune_conn(
     policy: KeepPolicy,
     grouper: Grouper | None,
     filter: SnapFilter,
+    allow_destroy_all: bool,
     dry_run: bool
 ):
     # Fetch all snapshots for all datasets
@@ -87,5 +89,5 @@ def prune_conn(
         policy,
         dry_run=dry_run,
         grouper=grouper,
-        allow_destroy_all=filter.shortnames is not None  # only allow if specific snapshots were passed
+        allow_destroy_all=allow_destroy_all
     )

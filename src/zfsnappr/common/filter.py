@@ -1,68 +1,109 @@
-from typing import Callable, Optional, Literal
+from __future__ import annotations
 from collections.abc import Collection
-from dataclasses import dataclass
+from abc import abstractmethod, ABC
 
 from .zfs import Snapshot
+from zfsnappr.common.path import Path
 
 
-@dataclass
-class SnapFilter:
-    """
-    A snapshot passes the filter if it passes every subfilter.
+class SnapFilter(ABC):
+    @abstractmethod
+    def allows(self, snap: Snapshot) -> bool: ...
 
-    By default, all subfilters are disabled and every snapshot passes the filter.
-    """
-
-    tag_groups: Collection[Collection[str]] | None = None
-    """Collection of tag groups.
-    A snap passes the tag subfilter if for any tag group it has all the tags in the group.
+    def apply(self, snaps: Collection[Snapshot]) -> list[Snapshot]:
+        return [s for s in snaps if self.allows(s)]
     
-    If `None` (default), tag filtering is disabled.
+    def __and__(self, other: SnapFilter):
+        return CompositeFilter(self, other)
+
+
+class _AllowAllFilter(SnapFilter):
+    def allows(self, snap: Snapshot) -> bool:
+        return True
+
+ALLOW_ALL_FILTER = _AllowAllFilter()
+
+
+class _BlockAllFilter(SnapFilter):
+    def allows(self, snap: Snapshot) -> bool:
+        return False
+    
+BLOCK_ALL_FILTER = _BlockAllFilter()
+
+
+class CompositeFilter(SnapFilter):
+    """A snapshot passes the filter if it passes every subfilter."""
+    subfilters: list[SnapFilter]
+
+    def __init__(self, *subfilters: SnapFilter) -> None:
+        self.subfilters = list(subfilters)
+
+    def allows(self, snap: Snapshot):
+        return all(subfilter.allows(snap) for subfilter in self.subfilters)
+    
+    def __iand__(self, other: SnapFilter):
+        self.subfilters.append(other)
+        return self
+
+
+class ShortnameFilter(SnapFilter):
     """
-
-    datasets: Collection[str] | None = None
-    """Collection of dataset paths.
-    A snap passes the dataset subfilter if its dataset path is in the collection.
-
-    If `None` (default), dataset filtering is disabled.
-    """
-
-    shortnames: Collection[str] | None = None
-    """Collection of shortnames.
+    Collection of shortnames.
     A snap passes the shortname subfilter if its name is in the collection.
-
-    If `None` (default), shortname filtering is disabled.
     """
+    shortnames: set[str]
+
+    def __init__(self, shortnames: Collection[str]) -> None:
+        self.shortnames = set(shortnames)
+
+    def allows(self, snap: Snapshot) -> bool:
+        return snap.shortname in self.shortnames
 
 
-def filter_snaps(snapshots: Collection[Snapshot], filter: SnapFilter) -> list[Snapshot]:
-    return [s for s in snapshots if _passes_filter(s, filter)]
+class DatasetFilter(SnapFilter):
+    """
+    Collection of dataset paths.
+    A snap passes the dataset subfilter if its dataset path is in the collection.
+    """
+    datasets: set[Path]
+
+    def __init__(self, datasets: Collection[Path | str]) -> None:
+        self.datasets = {Path(d) for d in datasets}
+
+    def allows(self, snap: Snapshot) -> bool:
+        return snap.dataset in self.datasets
 
 
-def _passes_filter(snap: Snapshot, filter: SnapFilter) -> bool:
-    # snap is included iff it has all the tags of one of the groups in "tag"
-    if filter.tag_groups is not None:
-        for tag_group in filter.tag_groups:
-            tag_group = set(tag_group)
+class TagFilter(SnapFilter):
+    """
+    Collection of tag groups.
+    A snap passes the tag subfilter if for any tag group it has all the tags in the group.
+    """
+    tag_groups: set[frozenset[str]]
+
+    def __init__(self, tag_groups: Collection[Collection[str]]) -> None:
+        self.tag_groups = {frozenset(g) for g in tag_groups}
+
+    def allows(self, snap: Snapshot) -> bool:
+        # snap is included iff it has all the tags of one of the groups in "tag"
+        for tag_group in self.tag_groups:
             # Normal case: snap has all group tags
             if snap.tags is not None and snap.tags >= tag_group:
-                break
+                return True
             # Special case: snap tags are unset and group contains UNSET
             if snap.tags is None and len(tag_group) == 1 and next(iter(tag_group)) == 'UNSET':
-                break
+                return True
             # Special case: snap tags are empty and group contains empty tag.
             # The empty tag serves as token to select snaps without tags.
             if snap.tags == set() and len(tag_group) == 1 and next(iter(tag_group)) == '':
-                break
-        else:
-            return False
+                return True
+        return False
 
-    if filter.datasets is not None:
-        if not any(snap.dataset == d for d in filter.datasets):
-            return False
 
-    if filter.shortnames is not None:
-        if not any(snap.shortname == s for s in filter.shortnames):
-            return False
-
-    return True
+class snapfilters:
+    Tag = TagFilter
+    Shortname = ShortnameFilter
+    ALLOW_ALL = ALLOW_ALL_FILTER
+    BLOCK_ALL = BLOCK_ALL_FILTER
+    Dataset = DatasetFilter
+    Composite = CompositeFilter

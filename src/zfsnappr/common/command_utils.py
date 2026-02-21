@@ -1,7 +1,7 @@
 import logging
 from collections.abc import Collection
 
-from zfsnappr.common.filter import SnapFilter, filter_snaps
+from zfsnappr.common.filter import SnapFilter, snapfilters
 from zfsnappr.common.args import CommonArgs
 from zfsnappr.common.sort import sort_snaps_by_time
 from zfsnappr.common.zfs import ZfsCli
@@ -29,21 +29,20 @@ def resolve_filter_args(
     tag_groups: Collection[str] = [],
     shortnames: Collection[str] = []
 ) -> SnapFilter:
-    # Empty tag is preserved; used as token to make it possible to match snapshots without tags.
-    tag_groups_resolved = {frozenset(g.split(',')) for g in tag_groups} if tag_groups else None
-    shortnames_resolved = set(shortnames) if shortnames else None
-
-    return SnapFilter(
-        tag_groups=tag_groups_resolved,
-        shortnames=shortnames_resolved,
-    )
+    filter: SnapFilter = snapfilters.Composite()
+    if tag_groups:
+        # Empty tag is preserved; used as token to make it possible to match snapshots without tags.
+        filter &= snapfilters.Tag([g.split(',') for g in tag_groups])
+    if shortnames:
+        filter &= snapfilters.Shortname(shortnames)
+    return filter
 
 
 def fetch_snaps(
     cli: ZfsCli,
     datasets: ResolvedDatasets,
     props: Collection[str] = [],
-    filter: SnapFilter = SnapFilter()
+    filter: SnapFilter = snapfilters.ALLOW_ALL
 ):
     """Fetch all snapshots of the given `datasets`.
 
@@ -53,6 +52,6 @@ def fetch_snaps(
         *cli.get_all_snapshots([d.path for d in datasets.recursive_groups], properties=props, recursive=True),
         *cli.get_all_snapshots([d.path for d in datasets.single_datasets], properties=props, recursive=False)
     ]
-    snaps = filter_snaps(snaps, filter)
+    snaps = filter.apply(snaps)
     snaps = sort_snaps_by_time(snaps)
     return snaps
