@@ -173,8 +173,9 @@ def replicate_snaps_incremental(
     ##### PHASE 3: Transfer snapshots sequentially
 
     total = len(transfer_sequence) - 1
-    log.info(_s() + f"Transferring {total} snapshots from '{source_dataset}' to '{dest_dataset}'")
+    log.info(_s() + f"Found {total} snapshots to transfer")
     for i, (_base, _snap) in enumerate(pairwise(transfer_sequence)):
+        log.info(_s() + f"Transferring snapshot [{i+1}/{total}]: {_snap.shortname}")
         send_receive_incremental(
             clis=(source_cli, dest_cli),
             dest_dataset=dest_dataset,
@@ -183,7 +184,6 @@ def replicate_snaps_incremental(
             base=_base,  # guaranteed to have hold
             log_indent=log_indent + 1
         )
-        log.info(_s() + f'{i+1}/{total} transferred')
     dest_snaps = [s.with_dataset(dest_dataset) for s in reversed(transfer_sequence[1:])] + dest_snaps
 
 
@@ -222,10 +222,10 @@ def ensure_holds(
     # Ensure latest common snap is held
     src_snap, dest_snap = latest_common_snap
     if holdtags[0] not in holds[0][src_snap.longname]:
-        log.info(_s() + f"Creating hold for latest common snapshot '{src_snap.shortname}' on source '{src_snap.dataset}'")
+        log.info(_s() + f"Creating hold for latest common snapshot '{src_snap.shortname}' on source")
         clis[0].hold([src_snap.longname], tag=holdtags[0])
     if holdtags[1] not in holds[1][dest_snap.longname]:
-        log.info(_s() + f"Creating hold for latest common snapshot '{dest_snap.shortname}' on destination '{dest_snap.dataset}'")
+        log.info(_s() + f"Creating hold for latest common snapshot '{dest_snap.shortname}' on destination")
         clis[1].hold([dest_snap.longname], tag=holdtags[1])
 
     # Remove all other holdtags
@@ -275,8 +275,8 @@ def _release_holds(
         [s for s in snaps_longnames[1] if release_holdtags[1] in current_holdtags[1][s]],
     )
     if release_snaps[0]:
-        log.info(_s() + f"Releasing {len(release_snaps[0])} obsolete holds in source '{datasets[0]}'")
+        log.info(_s() + f"Releasing {len(release_snaps[0])} obsolete holds on source")
     if release_snaps[1]:
-        log.info(_s() + f"Releasing {len(release_snaps[1])} obsolete holds in destination '{datasets[1]}'")
+        log.info(_s() + f"Releasing {len(release_snaps[1])} obsolete holds on destination")
     clis[0].release_hold(release_snaps[0], release_holdtags[0])
     clis[1].release_hold(release_snaps[1], release_holdtags[1])

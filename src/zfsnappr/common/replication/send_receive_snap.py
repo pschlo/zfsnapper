@@ -121,6 +121,8 @@ def _send_receive(
                         p.kill()
                     except Exception:
                         pass
+        if isinstance(e, KeyboardInterrupt):
+            raise e
         raise ReplicationError(
             f"Replication of snapshot '{snapshot.shortname}' from '{snapshot.dataset}' to '{dest_dataset}' failed"
         ) from e
