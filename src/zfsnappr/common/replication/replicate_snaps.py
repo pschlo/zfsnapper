@@ -166,7 +166,7 @@ def replicate_snaps_incremental(
     
     # Optionally ensure dest is at snapshot
     if rollback:
-        log.info(_s() + f"Rolling back destination '{dest_dataset}' to latest snapshot")
+        log.info(_s() + f"Rolling back destination to latest snapshot")
         dest_cli.rollback(dest_snaps[0].longname)
 
 
