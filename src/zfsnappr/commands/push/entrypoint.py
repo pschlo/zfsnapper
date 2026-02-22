@@ -39,9 +39,9 @@ def entrypoint(args: Args) -> None:
 
 def push_conn(
     src_cli: ZfsCli,
+    dest_cli: ZfsCli,
     src_datasets: ResolvedDatasets,
     dest_root: Path,
-    dest_cli: ZfsCli,
     allow_initialize: bool,
     rollback: bool,
     src_conn: ConnSpec,

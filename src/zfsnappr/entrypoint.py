@@ -12,7 +12,6 @@ from .commands import (
   prune as _prune,
   create as _create,
   push as _push,
-  pull as _pull,
   list as _list,
   tag as _tag,
   unhold as _unhold,
@@ -43,8 +42,6 @@ def _entrypoint():
             _create.entrypoint(cast(_create.Args, args))
         case 'push':
             _push.entrypoint(cast(_push.Args, args))
-        case 'pull':
-            _pull.entrypoint(cast(_pull.Args, args))
         case 'list':
             _list.entrypoint(cast(_list.Args, args))
         case 'tag':

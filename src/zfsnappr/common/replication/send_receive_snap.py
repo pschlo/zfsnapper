@@ -4,10 +4,11 @@ import logging
 import threading
 import time
 
-from ..zfs import ZfsCli, Snapshot, ZfsProperty, Dataset, ZfsDatasetType
-from zfsnappr.common.replication.exception import ReplicationError
+from zfsnappr.common.zfs import ZfsCli, Snapshot, ZfsProperty, Dataset, ZfsDatasetType
 from zfsnappr.common.path import Path
 from zfsnappr.common.utils import space
+
+from .exception import ReplicationError
 
 Holdtag = str | Callable[[Dataset], str]
 

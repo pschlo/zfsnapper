@@ -7,7 +7,6 @@ from .commands import (
   prune as _prune,
   create as _create,
   push as _push,
-  pull as _pull,
   list as _list,
   tag as _tag,
   unhold as _unhold,
@@ -45,9 +44,6 @@ def get_args() -> Args:
     )
     _push.args.setup(
         subparsers.add_parser('push', parents=[common])
-    )
-    _pull.args.setup(
-        subparsers.add_parser('pull', parents=[common])
     )
     _tag.args.setup(
         subparsers.add_parser('tag', parents=[common])

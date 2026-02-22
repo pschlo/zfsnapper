@@ -4,13 +4,13 @@ from collections.abc import Collection
 import logging
 from itertools import pairwise
 
-from ..zfs import Snapshot, ZfsCli, ZfsProperty, Dataset
-from .send_receive_snap import send_receive_incremental, send_receive_initial
+from zfsnappr.common.zfs import Snapshot, ZfsCli, ZfsProperty, Dataset
 from zfsnappr.common.replication.exception import ReplicationError
 from zfsnappr.common.path import Path
 from zfsnappr.common.sort import sort_snaps_by_time
 from zfsnappr.common.utils import space
 
+from .send_receive_snap import send_receive_incremental, send_receive_initial
 
 log = logging.getLogger(__name__)
 
