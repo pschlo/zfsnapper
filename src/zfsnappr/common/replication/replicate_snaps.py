@@ -28,6 +28,7 @@ def replicate_snaps_initial(
     source_snaps: Collection[Snapshot],
     dest_dataset: Path,
     dest_cli: ZfsCli,
+    dest_root: Path,
     log_indent: int = 0
 ):
     def _s(level: int = 0):
@@ -36,7 +37,8 @@ def replicate_snaps_initial(
     # sorting is required
     source_snaps = sort_snaps_by_time(source_snaps, reverse=True)
 
-    log.info(_s() + f"Creating destination dataset '{dest_dataset}' by transferring the oldest snapshot")
+    _rel_dest = dest_dataset.relative_to(dest_root)
+    log.info(_s() + f"Creating destination dataset by transferring oldest snapshot")
     initial_src_snap = source_snaps[-1]
     send_receive_initial(
         clis=(source_cli, dest_cli),
@@ -145,7 +147,7 @@ def replicate_snaps_incremental(
     assert transfer_sequence
 
     if len(transfer_sequence) <= 1:
-        log.info(_s() + f"Source '{source_dataset}' has no new snapshots to transfer")
+        log.info(_s() + f"Source has no new snapshots to transfer")
         return
 
     # Find snapshot that cannot be transferred because their timestamp equals their predecessor

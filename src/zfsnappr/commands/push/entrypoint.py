@@ -86,33 +86,41 @@ def push_conn(
     )
 
     # Replicate dataset-by-dataset
+    is_error = False
     for srcpath, destpath in srcpath_to_destpath.items():
-        log.info(_s(1) + f"Transferring from '{src_conn}/{srcpath}' to '{dst_conn}/{destpath}'")
-        src_snaps = srcpath_to_snaps[srcpath]
+        try:
+            relpath = srcpath.relative_to(src_root)
+            log.info(_s(1) + f"Checking dataset: ~{f'/{relpath}' if relpath else ''}")
+            src_snaps = srcpath_to_snaps[srcpath]
 
-        if destpath in missing_dest_paths:
-            # Dest dataset does not exist; cannot fetch snapshots.
-            if not allow_initialize:
-                raise ReplicationError(f"Destination dataset '{destpath}' does not exist and will not be created")
-            # Do initial send-receive to create dest dataset.
-            replicate_snaps_initial(
-                source_cli=src_cli,
-                source_dataset=src_datasets.path_to_dataset[srcpath],
-                source_snaps=src_snaps,
-                dest_dataset=destpath,
-                dest_cli=dest_cli,
-                log_indent=2
-            )
-        else:
-            # Do incremental send-receive.
-            dest_snaps = destpath_to_snaps[destpath]
-            replicate_snaps_incremental(
-                source_cli=src_cli,
-                source_snaps=src_snaps,
-                dest_cli=dest_cli,
-                dest_snaps=dest_snaps,
-                rollback=rollback,
-                log_indent=2
-            )
+            if destpath in missing_dest_paths:
+                # Dest dataset does not exist; cannot fetch snapshots.
+                if not allow_initialize:
+                    raise ReplicationError(f"Destination dataset '{destpath}' does not exist and will not be created")
+                # Do initial send-receive to create dest dataset.
+                replicate_snaps_initial(
+                    source_cli=src_cli,
+                    source_dataset=src_datasets.path_to_dataset[srcpath],
+                    source_snaps=src_snaps,
+                    dest_dataset=destpath,
+                    dest_cli=dest_cli,
+                    dest_root=dest_root,
+                    log_indent=2
+                )
+            else:
+                # Do incremental send-receive.
+                dest_snaps = destpath_to_snaps[destpath]
+                replicate_snaps_incremental(
+                    source_cli=src_cli,
+                    source_snaps=src_snaps,
+                    dest_cli=dest_cli,
+                    dest_snaps=dest_snaps,
+                    rollback=rollback,
+                    log_indent=2
+                )
+        except ReplicationError as e:
+            is_error = True
+            log.error(e)
 
-        # log.info(_s(1) + f"Completed transfer from '{src_conn}/{srcpath}' to '{dst_conn}/{destpath}'")
+    if is_error:
+        raise ReplicationError(f"Replication failed for one or more datasets")
