@@ -7,7 +7,7 @@ from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg, DatasetSpec, ConnSpec
 from zfsnappr.common.path import Path, longest_common_ancestor
 from zfsnappr.common.zfs import ZfsCli
-from zfsnappr.common.utils import group_by, combine_dicts
+from zfsnappr.common.utils import group_by, combine_dicts, space
 from .args import Args
 
 
@@ -19,13 +19,12 @@ def entrypoint(args: Args) -> None:
     dest_spec = parse_dataset_arg(args.dest)
     dest_cli = create_zfs_cli(dest_spec.conn)
 
-    # _first = True
+    _first = True
     for conn, (datasets, cli) in src_resolved.items():
-        # if not _first:
-        #     log.info("")
-        # _first = False
+        if not _first:
+            log.info("")
+        _first = False
 
-        # log.info(f"Location: {conn}")
         push_conn(
             src_cli=cli,
             src_datasets=datasets,
@@ -38,13 +37,24 @@ def entrypoint(args: Args) -> None:
         )
 
 
-def push_conn(src_cli: ZfsCli, src_datasets: ResolvedDatasets, dest_root: Path, dest_cli: ZfsCli, allow_initialize: bool, rollback: bool, src_conn: ConnSpec, dst_conn: ConnSpec):
-    # Push MULTIPLE source datasets to SINGLE dest dataset
-    # Find longest common prefix of source datasets and take this as src root
-    # Map src root to dst root
+def push_conn(
+    src_cli: ZfsCli,
+    src_datasets: ResolvedDatasets,
+    dest_root: Path,
+    dest_cli: ZfsCli,
+    allow_initialize: bool,
+    rollback: bool,
+    src_conn: ConnSpec,
+    dst_conn: ConnSpec
+):
+    """
+    Push MULTIPLE source datasets to SINGLE dest dataset
+    """
+    def _s(level: int = 0):
+        return space(level)
 
     # Find longest common src prefix; may be empty path
-    src_root = longest_common_ancestor([d.path for d in src_datasets.matching_datasets])
+    src_root = longest_common_ancestor(src_datasets.matching_paths)
     log.info(f"Replicating from source root '{src_conn}/{src_root}' to destination root '{dst_conn}/{dest_root}'")
 
     # Create matching of source dataset to dest dataset
@@ -76,13 +86,8 @@ def push_conn(src_cli: ZfsCli, src_datasets: ResolvedDatasets, dest_root: Path, 
     )
 
     # Replicate dataset-by-dataset
-    _first = True
     for srcpath, destpath in srcpath_to_destpath.items():
-        if not _first:
-            log.info("")
-        _first = False
-
-        log.info(f"Transferring from '{src_conn}/{srcpath}' to '{dst_conn}/{destpath}'")
+        log.info(_s(1) + f"Transferring from '{src_conn}/{srcpath}' to '{dst_conn}/{destpath}'")
         src_snaps = srcpath_to_snaps[srcpath]
 
         if destpath in missing_dest_paths:
@@ -95,7 +100,8 @@ def push_conn(src_cli: ZfsCli, src_datasets: ResolvedDatasets, dest_root: Path, 
                 source_dataset=src_datasets.path_to_dataset[srcpath],
                 source_snaps=src_snaps,
                 dest_dataset=destpath,
-                dest_cli=dest_cli
+                dest_cli=dest_cli,
+                log_indent=2
             )
         else:
             # Do incremental send-receive.
@@ -105,22 +111,8 @@ def push_conn(src_cli: ZfsCli, src_datasets: ResolvedDatasets, dest_root: Path, 
                 source_snaps=src_snaps,
                 dest_cli=dest_cli,
                 dest_snaps=dest_snaps,
-                rollback=rollback
+                rollback=rollback,
+                log_indent=2
             )
 
-        log.info(f"Transfer from '{src_conn}/{srcpath}' to '{dst_conn}/{destpath}' complete")
-
-
-    # prefix = "Recursively pushing" if args.recursive else "Pushing"
-    # log.info(prefix + f' from source "{source_dataset}" to dest "{dest_dataset}"')
-
-    # replicate(
-    #     source_cli=source_cli,
-    #     source_dataset=source_dataset,
-    #     dest_cli=dest_cli,
-    #     dest_dataset=dest_root,
-    #     recursive=args.recursive,
-    #     initialize=args.init,
-    #     rollback=args.rollback,
-    #     exclude_datasets=args.exclude_dataset
-    # )
+        # log.info(_s(1) + f"Completed transfer from '{src_conn}/{srcpath}' to '{dst_conn}/{destpath}'")

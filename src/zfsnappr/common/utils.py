@@ -49,3 +49,7 @@ def longest_common_prefix[T](*sequences: Sequence[T]) -> tuple[T, ...]:
     cols = zip(*sequences)  # stops at shortest path automatically
     common = (col[0] for col in takewhile(lambda col: all(x == col[0] for x in col), cols))
     return tuple(common)
+
+
+def space(num: int):
+    return " " * (4 * num)
