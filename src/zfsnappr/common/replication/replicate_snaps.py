@@ -136,7 +136,7 @@ def replicate_snaps_incremental(
         _dest_tags = base_snap[1].tags or set()
         _missing = _src_tags - _dest_tags
         if _missing:
-            log.info(_s() + f"Adding missing tags on base snapshot '{base_snap[1].shortname}' at destination '{dest_dataset}'")
+            log.info(_s() + f"Adding missing tags to base snapshot '{base_snap[1].shortname}' on destination")
             dest_cli.set_tags(base_snap[1].longname, _dest_tags | _missing)
 
     # Determine sequence of source snapshots to transfer.
@@ -147,7 +147,7 @@ def replicate_snaps_incremental(
     assert transfer_sequence
 
     if len(transfer_sequence) <= 1:
-        log.info(_s() + f"Source has no new snapshots to transfer")
+        log.info(_s() + f"Already up to date")
         return
 
     # Find snapshot that cannot be transferred because their timestamp equals their predecessor
@@ -173,7 +173,7 @@ def replicate_snaps_incremental(
     ##### PHASE 3: Transfer snapshots sequentially
 
     total = len(transfer_sequence) - 1
-    log.info(_s() + f"Found {total} snapshots to transfer")
+    log.info(_s() + f"Destination is {total} snapshots behind")
     for i, (_base, _snap) in enumerate(pairwise(transfer_sequence)):
         log.info(_s() + f"Transferring snapshot [{i+1}/{total}]: {_snap.shortname}")
         send_receive_incremental(
