@@ -1,8 +1,8 @@
 from __future__ import annotations
 import logging
 
-from zfsnappr.common.replication import replicate
-from zfsnappr.common.resolve_datasets import resolve_datasets
+# from zfsnappr.common.replication import replicate
+from zfsnappr.common.resolve_datasets import resolve_dataset_specs
 from .args import Args
 
 

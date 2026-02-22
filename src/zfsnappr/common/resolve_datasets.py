@@ -5,7 +5,7 @@ from .zfs import ZfsCli, Dataset, RemoteZfsCli, LocalZfsCli
 from .resolve_paths import resolve_paths
 from .path import Path
 from .parse_dataset_arg import parse_dataset_arg, ConnSpec, DatasetSpec
-from .utils import group_by
+from .utils import group_by, combine_dicts
 from .sort import sort_conns
 
 
@@ -19,7 +19,9 @@ class Policy:
 
 @dataclass
 class ResolvedDatasets:
-    kept_datasets: set[Dataset]
+    path_to_dataset: dict[Path, Dataset]
+    matching_datasets: set[Dataset]
+    matching_paths: set[Path]
     single_datasets: set[Dataset]
     recursive_groups: set[Dataset]
 
@@ -35,11 +37,11 @@ def create_zfs_cli(conn: ConnSpec) -> ZfsCli:
         return LocalZfsCli()
 
 
-def resolve_datasets(
-    include_exact: Collection[DatasetSpec],
-    include_recurse: Collection[DatasetSpec],
-    exclude_exact: Collection[DatasetSpec],
-    exclude_recurse: Collection[DatasetSpec],
+def resolve_dataset_specs(
+    include_exact: Collection[DatasetSpec] = [],
+    include_recurse: Collection[DatasetSpec] = [],
+    exclude_exact: Collection[DatasetSpec] = [],
+    exclude_recurse: Collection[DatasetSpec] = [],
     strict: bool = False
 ) -> tuple[
     dict[ConnSpec, ResolvedDatasets],
@@ -70,49 +72,75 @@ def resolve_datasets(
 
     # For each conn, determine include/exclude policy.
     policies = {
-        conn: Policy(
-            include_exact=_include_exact_grouped.get(conn, []),
-            include_recurse=_include_recurse_grouped.get(conn, []),
-            exclude_exact=_exclude_exact_grouped.get(conn, []),
-            exclude_recurse=_exclude_recurse_grouped.get(conn, [])
+        c: Policy(
+            include_exact=_include_exact_grouped.get(c, []),
+            include_recurse=_include_recurse_grouped.get(c, []),
+            exclude_exact=_exclude_exact_grouped.get(c, []),
+            exclude_recurse=_exclude_recurse_grouped.get(c, [])
         )
-        for conn in conns
+        for c in conns
     }
 
     # For each conn, apply its policy.
     datasets: dict[ConnSpec, ResolvedDatasets] = {}
-    for conn, policy in policies.items():
-        all_datasets: list[Dataset] = clis[conn].get_all_datasets()
-        path_to_dataset: dict[Path, Dataset] = {d.path: d for d in all_datasets}
-
-        # Resolve dataset paths
-        resolved_paths = resolve_paths(
-            all_paths=[d.path for d in all_datasets],
-            included_exact=policy.include_exact,
-            included_recurse=policy.include_recurse,
-            excluded_exact=policy.exclude_exact,
-            excluded_recurse=policy.exclude_recurse,
-            conservative_grouping=strict,
-            strict_exclude=strict
+    for conn, (policy, cli) in combine_dicts(policies, clis).items():
+        resolved_datasets = resolve_conn_datasets(
+            cli=cli,
+            include_exact=policy.include_exact,
+            include_recurse=policy.include_recurse,
+            exclude_exact=policy.exclude_exact,
+            exclude_recurse=policy.exclude_recurse,
+            strict=strict
         )
 
         # Ensure there are kept datasets
-        if not resolved_paths.kept_paths:
+        if not resolved_datasets.matching_datasets:
             raise ValueError(f"Resolving datasets for location '{conn}' yielded no datasets")
 
         # Ensure all explicitly included datasets are kept, to avoid surprises
-        for d in policy.include_exact:
-            if d and d not in resolved_paths.kept_paths:
-                raise ValueError(f"Dataset '{conn}/{d}' is no longer included in resolved datasets")
-
-        # Reconstruct datasets
-        resolved_datasets = ResolvedDatasets(
-            kept_datasets={path_to_dataset[p] for p in resolved_paths.kept_paths},
-            single_datasets={path_to_dataset[p] for p in resolved_paths.single_paths},
-            # In ZFS, parents must exist, so this is safe
-            recursive_groups={path_to_dataset[p] for p in resolved_paths.recursive_groups}
-        )
+        _inc_exact = {p for p in policy.include_exact if p}
+        _kept_paths = {d.path for d in resolved_datasets.matching_datasets}
+        if diff := _inc_exact - _kept_paths:
+            ds = next(iter(diff))
+            raise ValueError(f"Dataset '{conn}/{ds}' is no longer included in resolved datasets")
 
         datasets[conn] = resolved_datasets
 
     return datasets, clis
+
+
+
+def resolve_conn_datasets(
+    cli: ZfsCli,
+    include_exact: Collection[Path] = [],
+    include_recurse: Collection[Path] = [],
+    exclude_exact: Collection[Path] = [],
+    exclude_recurse: Collection[Path] = [],
+    strict: bool = False
+) -> ResolvedDatasets:
+    """Resolve the datasets of a single connection."""
+    all_datasets: list[Dataset] = cli.get_all_datasets()
+    path_to_dataset: dict[Path, Dataset] = {d.path: d for d in all_datasets}
+
+    # Resolve dataset paths
+    resolved_paths = resolve_paths(
+        all_paths=[d.path for d in all_datasets],
+        included_exact=include_exact,
+        included_recurse=include_recurse,
+        excluded_exact=exclude_exact,
+        excluded_recurse=exclude_recurse,
+        conservative_grouping=strict,
+        strict_exclude=strict
+    )
+
+    # Reconstruct datasets
+    resolved_datasets = ResolvedDatasets(
+        path_to_dataset=path_to_dataset,
+        matching_datasets={path_to_dataset[p] for p in resolved_paths.matching_paths},
+        matching_paths=resolved_paths.matching_paths,
+        single_datasets={path_to_dataset[p] for p in resolved_paths.single_paths},
+        # In ZFS, parents must exist, so this is safe
+        recursive_groups={path_to_dataset[p] for p in resolved_paths.recursive_groups}
+    )
+
+    return resolved_datasets

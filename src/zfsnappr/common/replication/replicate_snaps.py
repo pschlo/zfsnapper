@@ -7,6 +7,7 @@ from itertools import pairwise
 from ..zfs import Snapshot, ZfsCli, ZfsProperty, Dataset
 from .send_receive_snap import send_receive_incremental, send_receive_initial
 from zfsnappr.common.replication.exception import ReplicationError
+from zfsnappr.common.path import Path
 from zfsnappr.common.sort import sort_snaps_by_time
 
 
@@ -20,14 +21,46 @@ def holdtag_dest(src_dataset: Dataset):
   return f'zfsnappr-recvbase-{src_dataset.guid}'
 
 
+def replicate_snaps_initial(
+  source_cli: ZfsCli,
+  source_dataset: Dataset,
+  source_snaps: Collection[Snapshot],
+  dest_dataset: Path,
+  dest_cli: ZfsCli,
+):
+    # sorting is required
+    source_snaps = sort_snaps_by_time(source_snaps, reverse=True)
+
+    log.info(f"Creating destination dataset '{dest_dataset}' by transferring the oldest snapshot")
+    initial_src_snap = source_snaps[-1]
+    send_receive_initial(
+        clis=(source_cli, dest_cli),
+        dest_dataset=dest_dataset,
+        source_dataset_type=source_dataset.type,
+        snapshot=initial_src_snap,
+        holdtags=(holdtag_src, holdtag_dest)
+    )
+
+    # Continue with incremental replication
+    initial_dest_snap = initial_src_snap.with_dataset(dest_dataset)
+    # Temporary hack to ensure holds get respected
+    initial_src_snap.holds += 1
+    initial_dest_snap.holds += 1
+    replicate_snaps_incremental(
+      source_cli=source_cli,
+      source_snaps=source_snaps,
+      dest_cli=dest_cli,
+      dest_snaps=[initial_dest_snap],
+      rollback=False  # we just created the dataset; rollback would be obsolete
+    )
+
+
 # TODO: raw send for encrypted datasets?
-def replicate_snaps(
+def replicate_snaps_incremental(
   source_cli: ZfsCli,
   source_snaps: Collection[Snapshot],
   dest_cli: ZfsCli,
   dest_snaps: Collection[Snapshot],
-  existing_dest_datasets: Collection[str],
-  initialize: bool,
   rollback: bool,
 ):
   """
@@ -53,28 +86,10 @@ def replicate_snaps(
 
   # sorting is required
   source_snaps = sort_snaps_by_time(source_snaps, reverse=True)
+  dest_snaps = sort_snaps_by_time(dest_snaps, reverse=True)
 
 
   ##### PHASE 1: Critical preparation, check for abort conditions
-
-  # ensure dest dataset exists
-  if dest_dataset not in existing_dest_datasets:
-    if initialize:
-      log.info(f"Creating destination dataset '{dest_dataset}' by transferring the oldest snapshot")
-      source_dataset_type = source_cli.get_dataset(source_dataset).type
-      send_receive_initial(
-        clis=(source_cli, dest_cli),
-        dest_dataset=dest_dataset,
-        source_dataset_type=source_dataset_type,
-        snapshot=source_snaps[-1],
-        holdtags=(holdtag_src, holdtag_dest)
-      )
-    else:
-      raise ReplicationError(f"Destination dataset '{dest_dataset}' does not exist and will not be created")
-
-  # get dest snaps
-  dest_snaps = dest_cli.get_all_snapshots(datasets=[dest_dataset])
-  dest_snaps = sort_snaps_by_time(dest_snaps, reverse=True)
 
   # resolve hold tags
   source_tag = holdtag_src(dest_cli.get_dataset(dest_dataset))
@@ -155,10 +170,15 @@ def replicate_snaps(
     )
     log.info(f'{i+1}/{total} transferred')
   dest_snaps = [s.with_dataset(dest_dataset) for s in reversed(transfer_sequence[1:])] + dest_snaps
-  log.info(f'Transfer complete')
 
 
-def ensure_holds(clis: tuple[ZfsCli,ZfsCli], snaps: tuple[list[Snapshot],list[Snapshot]], holdtags: tuple[str,str], latest_common_snap: tuple[Snapshot, Snapshot] | None, datasets: tuple[str, str]):
+def ensure_holds(
+    clis: tuple[ZfsCli, ZfsCli],
+    snaps: tuple[list[Snapshot], list[Snapshot]],
+    holdtags: tuple[str, str],
+    latest_common_snap: tuple[Snapshot, Snapshot] | None,
+    datasets: tuple[Path, Path]
+):
   """Ensures the latest common snapshot is held on both sides. Removes all other peer holdtags.
 
   After completion, one of these is true:
@@ -219,7 +239,13 @@ def determine_latest_common(snaps: tuple[list[Snapshot],list[Snapshot]]) -> tupl
   return latest_common_snap
 
 
-def _release_holds(clis: tuple[ZfsCli, ZfsCli], snaps_longnames: tuple[list[str], list[str]], release_holdtags: tuple[str, str], current_holdtags: tuple[dict[str, set[str]], dict[str, set[str]]], datasets: tuple[str, str]):
+def _release_holds(
+    clis: tuple[ZfsCli, ZfsCli],
+    snaps_longnames: tuple[list[str], list[str]],
+    release_holdtags: tuple[str, str],
+    current_holdtags: tuple[dict[str, set[str]], dict[str, set[str]]],
+    datasets: tuple[Path, Path]
+):
   # Filter for snaps that have the holdtags
   release_snaps = (
     [s for s in snaps_longnames[0] if release_holdtags[0] in current_holdtags[0][s]],

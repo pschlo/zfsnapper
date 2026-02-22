@@ -1,4 +1,4 @@
-from typing import Optional, Callable, Union
+from typing import Callable
 from subprocess import CalledProcessError
 import logging
 import threading
@@ -8,7 +8,7 @@ from ..zfs import ZfsCli, Snapshot, ZfsProperty, Dataset, ZfsDatasetType
 from zfsnappr.common.replication.exception import ReplicationError
 from zfsnappr.common.path import Path
 
-Holdtag = Union[str, Callable[[Dataset],str]]
+Holdtag = str | Callable[[Dataset], str]
 
 log = logging.getLogger(__name__)
 
@@ -29,11 +29,15 @@ def _send_receive(
   clis: tuple[ZfsCli, ZfsCli],
   dest_dataset: Path,
   snapshot: Snapshot,
-  base: Optional[Snapshot],
+  base: Snapshot | None,
   holdtags: tuple[Holdtag, Holdtag],
   properties: dict[str, str] = {}
 ) -> None:
-  """If base is given, it must have a hold."""
+  """
+  Perform a single send-receive.
+  
+  If base is given, it must have a hold.
+  """
   src_cli, dest_cli = clis
   send_proc, recv_proc = None, None
   terminated_send, terminated_recv = False, False
@@ -123,7 +127,7 @@ def send_receive_initial(
   snapshot: Snapshot,
   holdtags: tuple[Callable[[Dataset], str], Callable[[Dataset], str]]
 ) -> None:
-  """Perform an initial send, thereby creating the dest dataset."""
+  """Perform a single initial send-receive, thereby creating the dest dataset."""
   assert source_dataset_type in (ZfsDatasetType.FILESYSTEM, ZfsDatasetType.VOLUME)
   properties: dict[str, str] = {
     ZfsProperty.READONLY: 'on'
@@ -151,6 +155,7 @@ def send_receive_incremental(
   snapshot: Snapshot,
   base: Snapshot,
 ) -> None:
+  """Perform a single incremental send-receive."""
   _send_receive(
     clis=clis,
     dest_dataset=dest_dataset,

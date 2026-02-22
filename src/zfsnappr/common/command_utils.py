@@ -6,7 +6,7 @@ from zfsnappr.common.args import CommonArgs
 from zfsnappr.common.sort import sort_snaps_by_time
 from zfsnappr.common.zfs import ZfsCli
 from zfsnappr.common.utils import combine_dicts
-from zfsnappr.common.resolve_datasets import ResolvedDatasets, resolve_datasets
+from zfsnappr.common.resolve_datasets import ResolvedDatasets, resolve_dataset_specs
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg
 
 
@@ -19,7 +19,7 @@ def resolve_dataset_args(args: CommonArgs):
         return [parse_dataset_arg(s) for s in raw_specs]
 
     return combine_dicts(
-        *resolve_datasets(
+        *resolve_dataset_specs(
             include_exact=_parse(args.inc_dataset_exact),
             include_recurse=_parse(args.inc_dataset_recurse),
             exclude_exact=_parse(args.exc_dataset_exact),

@@ -45,7 +45,7 @@ class Node:
 
 @dataclass
 class ResolvedPaths:
-    kept_paths: set[Path]
+    matching_paths: set[Path]
     recursive_groups: set[Path]
     single_paths: set[Path]
 
@@ -247,7 +247,7 @@ def resolve_paths(
         )
 
     return ResolvedPaths(
-        kept_paths=kept_paths,
+        matching_paths=kept_paths,
         single_paths=singles,
         recursive_groups=groups
     )

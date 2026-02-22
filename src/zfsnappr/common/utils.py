@@ -1,5 +1,5 @@
-from typing import Callable, Any
-from collections.abc import Hashable, Iterable, Sequence
+from typing import Callable, Any, TypeVar
+from collections.abc import Hashable, Iterable, Sequence, Collection
 from itertools import takewhile
 from collections import defaultdict
 
@@ -7,11 +7,29 @@ from collections import defaultdict
 def group_by[Group: Hashable, Item](
     iterable: Iterable[Item],
     key: Callable[[Item], Group],
+    ensure_keys: Collection[Group] | None = None
 ) -> dict[Group, list[Item]]:
     # Identify and fill groups
     groups: dict[Group, list[Item]] = {}
     for item in iterable:
         groups.setdefault(key(item), []).append(item)
+
+    if ensure_keys is not None:
+        ensure_set = set(ensure_keys)
+        if len(ensure_set) != len(ensure_keys):
+            raise ValueError("ensure_keys contains duplicates")
+
+        # Ensure no unexpected keys
+        if diff := groups.keys() - ensure_set:
+            raise ValueError(f"Unexpected group key: {next(iter(diff))}")
+
+        # Add missing groups as empty
+        for g in ensure_set - groups.keys():
+            groups[g] = []
+
+        # Put in correct order
+        groups = {k: groups[k] for k in ensure_keys}
+
     return groups
 
 
