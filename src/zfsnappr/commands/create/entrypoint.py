@@ -27,8 +27,8 @@ def entrypoint(args: Args) -> None:
     resolved = resolve_dataset_args(args)
     for conn, (datasets, cli) in resolved.items():
         atomic_creates = [
-            *((d, False) for d in datasets.single_datasets),
-            *((d, True) for d in datasets.recursive_groups)
+            *((d, False) for d in datasets.explicit_datasets),
+            *((d, True) for d in datasets.recursive_root_datasets)
         ]
         for dataset, recurse in sorted(atomic_creates, key=lambda t: dataset_sortkey(t[0])):
             create_snapshot(conn=conn, cli=cli, dataset=dataset, filter_tags=args.tag, recurse=recurse)

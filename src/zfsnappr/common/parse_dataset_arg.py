@@ -11,7 +11,7 @@ class ConnSpec:
 
     def __str__(self) -> str:
         if self.host is None:
-            return "local"
+            return "LOCAL"
 
         res = self.host
         if self.user:

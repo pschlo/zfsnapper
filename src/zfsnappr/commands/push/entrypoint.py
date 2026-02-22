@@ -54,13 +54,13 @@ def push_conn(
         return space(level)
 
     # Find longest common src prefix; may be empty path
-    src_root = longest_common_ancestor(src_datasets.matching_paths)
+    src_root = longest_common_ancestor(src_datasets.matched_paths)
     log.info(f"Replicating: {src_conn}/{src_root} → {dst_conn}/{dest_root}")
 
     # Create matching of source dataset to dest dataset
     srcpath_to_destpath = {
         src_path: dest_root / src_path.relative_to(src_root)
-        for src_path in sorted(src_datasets.matching_paths, key=lambda p: p.depth)
+        for src_path in sorted(src_datasets.matched_paths, key=lambda p: p.depth)
     }
 
     # Determine corresponding dest datasets
@@ -71,18 +71,18 @@ def push_conn(
     )
 
     # Determine missing dest datasets
-    missing_dest_paths = set(srcpath_to_destpath.values()) - dest_datasets.matching_paths
+    missing_dest_paths = set(srcpath_to_destpath.values()) - dest_datasets.matched_paths
 
     # Fetch all snapshots.
     srcpath_to_snaps = group_by(
         fetch_snaps(cli=src_cli, datasets=src_datasets),
         lambda s: s.dataset,
-        ensure_keys=src_datasets.matching_paths
+        ensure_keys=src_datasets.matched_paths
     )
     destpath_to_snaps = group_by(
         fetch_snaps(cli=dest_cli, datasets=dest_datasets),
         lambda s: s.dataset,
-        ensure_keys=dest_datasets.matching_paths
+        ensure_keys=dest_datasets.matched_paths
     )
 
     # Replicate dataset-by-dataset

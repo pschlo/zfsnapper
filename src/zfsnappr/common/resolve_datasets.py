@@ -19,11 +19,16 @@ class Policy:
 
 @dataclass
 class ResolvedDatasets:
+    matched_datasets: set[Dataset]
+    matched_paths: set[Path]
+
+    explicit_datasets: set[Dataset]
+    explicit_paths: set[Path]
+
+    recursive_root_datasets: set[Dataset]
+    recursive_root_paths: set[Path]
+
     path_to_dataset: dict[Path, Dataset]
-    matching_datasets: set[Dataset]
-    matching_paths: set[Path]
-    single_datasets: set[Dataset]
-    recursive_groups: set[Dataset]
 
 
 def create_zfs_cli(conn: ConnSpec) -> ZfsCli:
@@ -94,12 +99,12 @@ def resolve_dataset_specs(
         )
 
         # Ensure there are kept datasets
-        if not resolved_datasets.matching_datasets:
+        if not resolved_datasets.matched_datasets:
             raise ValueError(f"Resolving datasets for location '{conn}' yielded no datasets")
 
         # Ensure all explicitly included datasets are kept, to avoid surprises
         _inc_exact = {p for p in policy.include_exact if p}
-        _kept_paths = {d.path for d in resolved_datasets.matching_datasets}
+        _kept_paths = {d.path for d in resolved_datasets.matched_datasets}
         if diff := _inc_exact - _kept_paths:
             ds = next(iter(diff))
             raise ValueError(f"Dataset '{conn}/{ds}' is no longer included in resolved datasets")
@@ -135,12 +140,17 @@ def resolve_conn_datasets(
 
     # Reconstruct datasets
     resolved_datasets = ResolvedDatasets(
-        path_to_dataset=path_to_dataset,
-        matching_datasets={path_to_dataset[p] for p in resolved_paths.matching_paths},
-        matching_paths=resolved_paths.matching_paths,
-        single_datasets={path_to_dataset[p] for p in resolved_paths.single_paths},
+        matched_datasets={path_to_dataset[p] for p in resolved_paths.matched_paths},
+        matched_paths=resolved_paths.matched_paths,
+
+        explicit_datasets={path_to_dataset[p] for p in resolved_paths.explicit_paths},
+        explicit_paths=resolved_paths.explicit_paths,
+
         # In ZFS, parents must exist, so this is safe
-        recursive_groups={path_to_dataset[p] for p in resolved_paths.recursive_groups}
+        recursive_root_datasets={path_to_dataset[p] for p in resolved_paths.recursive_roots},
+        recursive_root_paths=resolved_paths.recursive_roots,
+
+        path_to_dataset=path_to_dataset,
     )
 
     return resolved_datasets

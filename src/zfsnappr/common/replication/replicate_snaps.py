@@ -1,10 +1,9 @@
 from __future__ import annotations
-from typing import Optional, cast
 from collections.abc import Collection
 import logging
 from itertools import pairwise
 
-from zfsnappr.common.zfs import Snapshot, ZfsCli, ZfsProperty, Dataset
+from zfsnappr.common.zfs import Snapshot, ZfsCli, Dataset
 from zfsnappr.common.replication.exception import ReplicationError
 from zfsnappr.common.path import Path
 from zfsnappr.common.sort import sort_snaps_by_time
@@ -48,12 +47,14 @@ def replicate_snaps_initial(
         holdtags=(holdtag_src, holdtag_dest),
         log_indent=log_indent + 1
     )
-
-    # Continue with incremental replication
     initial_dest_snap = initial_src_snap.with_dataset(dest_dataset)
-    # Temporary hack to ensure holds get respected
+
+    # Since we just created the destination, the holdtag could not have existed before, but definitely does now.
+    # The number of holds must thus have increased by one.
     initial_src_snap.holds += 1
     initial_dest_snap.holds += 1
+
+    # Continue with incremental replication
     replicate_snaps_incremental(
         source_cli=source_cli,
         source_snaps=source_snaps,
@@ -134,8 +135,7 @@ def replicate_snaps_incremental(
     # Ensure base snapshot on dest has correct tags; this may help if previous replication was aborted before tags could be set
     if (_src_tags := base_snap[0].tags) is not None:
         _dest_tags = base_snap[1].tags or set()
-        _missing = _src_tags - _dest_tags
-        if _missing:
+        if _missing := _src_tags - _dest_tags:
             log.info(_s() + f"Adding missing tags to base snapshot '{base_snap[1].shortname}' on destination")
             dest_cli.set_tags(base_snap[1].longname, _dest_tags | _missing)
 
@@ -184,6 +184,7 @@ def replicate_snaps_incremental(
             base=_base,  # guaranteed to have hold
             log_indent=log_indent + 1
         )
+
     dest_snaps = [s.with_dataset(dest_dataset) for s in reversed(transfer_sequence[1:])] + dest_snaps
 
 
