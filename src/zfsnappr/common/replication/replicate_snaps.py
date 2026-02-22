@@ -25,12 +25,14 @@ def replicate_snaps(
   source_cli: ZfsCli,
   source_snaps: Collection[Snapshot],
   dest_cli: ZfsCli,
-  dest_dataset: str,
+  dest_snaps: Collection[Snapshot],
   existing_dest_datasets: Collection[str],
   initialize: bool,
   rollback: bool,
 ):
   """
+  Replicate single source dataset to single dest dataset.
+
   replicates source_snaps to dest_dataset
   all source_snaps must be of same dataset
 
@@ -43,6 +45,11 @@ def replicate_snaps(
     return
 
   source_dataset = next(iter(source_snaps)).dataset
+  dest_dataset = next(iter(dest_snaps)).dataset
+
+  # Snaps must all be of the same dataset
+  assert all(s.dataset == source_dataset for s in source_snaps)
+  assert all(s.dataset == dest_dataset for s in dest_snaps)
 
   # sorting is required
   source_snaps = sort_snaps_by_time(source_snaps, reverse=True)

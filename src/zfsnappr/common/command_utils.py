@@ -7,6 +7,7 @@ from zfsnappr.common.sort import sort_snaps_by_time
 from zfsnappr.common.zfs import ZfsCli
 from zfsnappr.common.utils import combine_dicts
 from zfsnappr.common.resolve_datasets import ResolvedDatasets, resolve_datasets
+from zfsnappr.common.parse_dataset_arg import parse_dataset_arg
 
 
 log = logging.getLogger(__name__)
@@ -14,12 +15,15 @@ log = logging.getLogger(__name__)
 
 def resolve_dataset_args(args: CommonArgs):
     """Shorthand function for parsing dataset args."""
+    def _parse(raw_specs: Collection[str]):
+        return [parse_dataset_arg(s) for s in raw_specs]
+
     return combine_dicts(
         *resolve_datasets(
-            include_exact=args.inc_dataset_exact,
-            include_recurse=args.inc_dataset_recurse,
-            exclude_exact=args.exc_dataset_exact,
-            exclude_recurse=args.exc_dataset_recurse,
+            include_exact=_parse(args.inc_dataset_exact),
+            include_recurse=_parse(args.inc_dataset_recurse),
+            exclude_exact=_parse(args.exc_dataset_exact),
+            exclude_recurse=_parse(args.exc_dataset_recurse),
             strict=args.strict
         )
     )

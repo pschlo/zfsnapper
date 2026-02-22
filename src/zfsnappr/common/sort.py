@@ -2,7 +2,7 @@ from collections.abc import Collection
 from typing import cast
 
 from zfsnappr.common.zfs import Snapshot, Dataset
-from zfsnappr.common.parse_dataset_spec import ConnSpec
+from zfsnappr.common.parse_dataset_arg import ConnSpec
 from zfsnappr.common.path import Path
 
 

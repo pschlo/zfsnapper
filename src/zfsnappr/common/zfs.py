@@ -72,7 +72,7 @@ class Snapshot:
     def longname(self):
         return f'{self.dataset}@{self.shortname}'
     
-    def with_dataset(self, dataset: str) -> Snapshot:
+    def with_dataset(self, dataset: Path | str) -> Snapshot:
         new_props = self.properties.copy()
         new_props[ZfsProperty.NAME] = f"{dataset}@{self.shortname}"
         return Snapshot(new_props)

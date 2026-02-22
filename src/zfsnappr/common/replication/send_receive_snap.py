@@ -6,6 +6,7 @@ import time
 
 from ..zfs import ZfsCli, Snapshot, ZfsProperty, Dataset, ZfsDatasetType
 from zfsnappr.common.replication.exception import ReplicationError
+from zfsnappr.common.path import Path
 
 Holdtag = Union[str, Callable[[Dataset],str]]
 
@@ -26,10 +27,10 @@ def start_progress_thread(send_proc, on_progress):
 
 def _send_receive(
   clis: tuple[ZfsCli, ZfsCli],
-  dest_dataset: str,
+  dest_dataset: Path,
   snapshot: Snapshot,
   base: Optional[Snapshot],
-  holdtags: tuple[Holdtag,Holdtag],
+  holdtags: tuple[Holdtag, Holdtag],
   properties: dict[str, str] = {}
 ) -> None:
   """If base is given, it must have a hold."""
@@ -117,11 +118,12 @@ def _send_receive(
 
 def send_receive_initial(
   clis: tuple[ZfsCli, ZfsCli],
-  dest_dataset: str,
+  dest_dataset: Path,
   source_dataset_type: ZfsDatasetType,
   snapshot: Snapshot,
   holdtags: tuple[Callable[[Dataset], str], Callable[[Dataset], str]]
 ) -> None:
+  """Perform an initial send, thereby creating the dest dataset."""
   assert source_dataset_type in (ZfsDatasetType.FILESYSTEM, ZfsDatasetType.VOLUME)
   properties: dict[str, str] = {
     ZfsProperty.READONLY: 'on'
@@ -144,7 +146,7 @@ def send_receive_initial(
 
 def send_receive_incremental(
   clis: tuple[ZfsCli, ZfsCli],
-  dest_dataset: str,
+  dest_dataset: Path,
   holdtags: tuple[str,str],
   snapshot: Snapshot,
   base: Snapshot,

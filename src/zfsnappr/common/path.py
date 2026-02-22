@@ -1,5 +1,8 @@
 from __future__ import annotations
 from typing import overload, SupportsIndex
+from collections.abc import Collection
+
+from .utils import longest_common_prefix
 
 
 class PathError(Exception):
@@ -38,7 +41,7 @@ class Path(tuple[str, ...]):
         # keep tuple semantics for indexing; SupportsIndex covers things like numpy ints
         return super().__getitem__(key)
     
-    def __truediv__(self, component: str) -> Path:
+    def __truediv__(self, component: Path | str) -> Path:
         return Path(*self, component)
 
     @property
@@ -46,9 +49,21 @@ class Path(tuple[str, ...]):
         """Empty path has depth `0`."""
         return len(self)
     
-    def covers(self, other: Path) -> bool:
+    def is_ancestor_of(self, other: Path) -> bool:
         """Returns whether `self` is a prefix of `other`."""
         return len(self) <= len(other) and other[:len(self)] == self
+    
+    def is_descendant_of(self, other: Path) -> bool:
+        return other.is_ancestor_of(self)
+    
+    def relative_to(self, ancestor: Path) -> Path:
+        if not ancestor.is_ancestor_of(self):
+            raise PathError(f"{self} is not under root {ancestor}")
+        return self[len(ancestor):]
 
 
 EMPTY_PATH: Path = Path()
+
+
+def longest_common_ancestor(paths: Collection[Path]) -> Path:
+    return Path(*longest_common_prefix(*paths))

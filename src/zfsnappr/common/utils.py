@@ -1,5 +1,6 @@
 from typing import Callable, Any
-from collections.abc import Hashable, Iterable
+from collections.abc import Hashable, Iterable, Sequence
+from itertools import takewhile
 from collections import defaultdict
 
 
@@ -24,3 +25,9 @@ def combine_dicts[K, V1, V2](dict1: dict[K, V1], dict2: dict[K, V2]) -> dict[K, 
 def sort_dict[K, V](dict_: dict[K, V], key: Callable[[K], Any], reverse: bool = False) -> dict[K, V]:
     sorted_keys = sorted(dict_.keys(), key=key, reverse=reverse)
     return {k: dict_[k] for k in sorted_keys}
+
+
+def longest_common_prefix[T](*sequences: Sequence[T]) -> tuple[T, ...]:
+    cols = zip(*sequences)  # stops at shortest path automatically
+    common = (col[0] for col in takewhile(lambda col: all(x == col[0] for x in col), cols))
+    return tuple(common)

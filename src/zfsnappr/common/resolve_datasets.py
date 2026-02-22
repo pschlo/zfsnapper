@@ -4,17 +4,17 @@ from collections.abc import Collection
 from .zfs import ZfsCli, Dataset, RemoteZfsCli, LocalZfsCli
 from .resolve_paths import resolve_paths
 from .path import Path
-from .parse_dataset_spec import parse_dataset_spec, ConnSpec
+from .parse_dataset_arg import parse_dataset_arg, ConnSpec, DatasetSpec
 from .utils import group_by
 from .sort import sort_conns
 
 
 @dataclass
 class Policy:
-    include_exact: set[Path]
-    include_recurse: set[Path]
-    exclude_exact: set[Path]
-    exclude_recurse: set[Path]
+    include_exact: Collection[Path]
+    include_recurse: Collection[Path]
+    exclude_exact: Collection[Path]
+    exclude_recurse: Collection[Path]
 
 
 @dataclass
@@ -35,31 +35,28 @@ def create_zfs_cli(conn: ConnSpec) -> ZfsCli:
         return LocalZfsCli()
 
 
-def parse_dataset_specs(raw_specs: Collection[str]) -> dict[ConnSpec, list[Path]]:
-    """Dataset path may be empty path."""
-    specs = [parse_dataset_spec(spec) for spec in raw_specs]
-    groups = group_by(specs, key=lambda s: s.conn)
-    return {conn: [s.dataset for s in _specs] for conn, _specs in groups.items()}
-
-
 def resolve_datasets(
-    include_exact: Collection[str],
-    include_recurse: Collection[str],
-    exclude_exact: Collection[str],
-    exclude_recurse: Collection[str],
+    include_exact: Collection[DatasetSpec],
+    include_recurse: Collection[DatasetSpec],
+    exclude_exact: Collection[DatasetSpec],
+    exclude_recurse: Collection[DatasetSpec],
     strict: bool = False
 ) -> tuple[
     dict[ConnSpec, ResolvedDatasets],
     dict[ConnSpec, ZfsCli]
 ]:
-    _include_exact_parsed = parse_dataset_specs(include_exact)
-    _include_recurse_parsed = parse_dataset_specs(include_recurse)
-    _exclude_exact_parsed = parse_dataset_specs(exclude_exact)
-    _exclude_recurse_parsed = parse_dataset_specs(exclude_recurse)
+    def _group_specs(specs: Collection[DatasetSpec]):
+        groups = group_by(specs, key=lambda s: s.conn)
+        return {conn: [s.dataset for s in _specs] for conn, _specs in groups.items()}
+
+    _include_exact_grouped = _group_specs(include_exact)
+    _include_recurse_grouped = _group_specs(include_recurse)
+    _exclude_exact_grouped = _group_specs(exclude_exact)
+    _exclude_recurse_grouped = _group_specs(exclude_recurse)
 
     # Collect all appearing connections.
-    inc_conns = _include_exact_parsed.keys() | _include_recurse_parsed.keys()
-    exc_conns = _exclude_exact_parsed.keys() | _exclude_recurse_parsed.keys()
+    inc_conns = _include_exact_grouped.keys() | _include_recurse_grouped.keys()
+    exc_conns = _exclude_exact_grouped.keys() | _exclude_recurse_grouped.keys()
     if not inc_conns:
         raise ValueError(f"No dataset locations specified")
     if diff := exc_conns - inc_conns:
@@ -74,10 +71,10 @@ def resolve_datasets(
     # For each conn, determine include/exclude policy.
     policies = {
         conn: Policy(
-            include_exact=set(_include_exact_parsed.get(conn, [])),
-            include_recurse=set(_include_recurse_parsed.get(conn, [])),
-            exclude_exact=set(_exclude_exact_parsed.get(conn, [])),
-            exclude_recurse=set(_exclude_recurse_parsed.get(conn, []))
+            include_exact=_include_exact_grouped.get(conn, []),
+            include_recurse=_include_recurse_grouped.get(conn, []),
+            exclude_exact=_exclude_exact_grouped.get(conn, []),
+            exclude_recurse=_exclude_recurse_grouped.get(conn, [])
         )
         for conn in conns
     }

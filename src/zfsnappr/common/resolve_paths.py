@@ -239,7 +239,7 @@ def resolve_paths(
     for p in kept_paths:
         # Either covered by single, or covered by exactly one group
         _covered_by_single = p in singles
-        _covered_by_groups = sum(g.covers(p) for g in groups)
+        _covered_by_groups = sum(g.is_ancestor_of(p) for g in groups)
         assert (
             (_covered_by_single and _covered_by_groups == 0)
             or

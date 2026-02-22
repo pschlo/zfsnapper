@@ -38,8 +38,8 @@ def is_alnum(value: str):
     return value and set(value) <= ALNUM
 
 
-def parse_dataset_spec(raw_spec: str):
-    """Dataset path may be empty path."""
+def parse_dataset_arg(arg: str) -> DatasetSpec:
+    """Returned dataset path may be empty path."""
     user: str | None
     host: str | None
     port: int | None
@@ -52,7 +52,7 @@ def parse_dataset_spec(raw_spec: str):
 
     # Split dataset path from domain/netloc.
     # Dataset may be empty string.
-    _parts = raw_spec.split('/', maxsplit=1)
+    _parts = arg.split('/', maxsplit=1)
     if len(_parts) == 1:
         _netloc, dataset = _parts[0] or None, ""
     elif len(_parts) == 2:
@@ -63,26 +63,26 @@ def parse_dataset_spec(raw_spec: str):
     if _netloc is not None:
         _parts = _netloc.split('@')
         if not all(_parts):
-            raise DatasetParseError(raw_spec)
+            raise DatasetParseError(arg)
         if len(_parts) == 1:
             user, _hostport = None, _parts[0]
         elif len(_parts) == 2:
             user, _hostport = _parts
         else:
-            raise DatasetParseError(raw_spec)
+            raise DatasetParseError(arg)
     else:
         user, _hostport = None, None
 
     if _hostport is not None:
         _parts = _hostport.rsplit(':', maxsplit=1)
         if not all(_parts):
-            raise DatasetParseError(raw_spec)
+            raise DatasetParseError(arg)
         if len(_parts) == 1:
             host, port = _parts[0], None
         elif len(_parts) == 2:
             host, port = _parts[0], int(_parts[1])
         else:
-            raise DatasetParseError(raw_spec)
+            raise DatasetParseError(arg)
     else:
         host, port = None, None
 
@@ -92,7 +92,7 @@ def parse_dataset_spec(raw_spec: str):
         not host or is_alnum(host),
         not dataset or all(map(is_alnum, dataset.split('/')))
     ]):
-        raise DatasetParseError(raw_spec)
+        raise DatasetParseError(arg)
     
     conn = ConnSpec(
         user=user,
