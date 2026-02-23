@@ -21,7 +21,6 @@ class Field:
     name: str
     get: Callable[[Snapshot], str]
 
-# TODO: Use this list output for other subcommands as well
 
 def entrypoint(args: Args) -> None:
     resolved = resolve_dataset_args(args)
@@ -34,7 +33,7 @@ def entrypoint(args: Args) -> None:
             log.info("")
         _first = False
 
-        log.info(f"[{conn}] Scanning snapshots")
+        log.info(f"[{conn}] Scanning snapshots on {len(datasets.matched)} datasets")
         list_conn(cli=cli, datasets=datasets, filter=filter, extend_holds=args.holds)
 
 

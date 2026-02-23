@@ -24,11 +24,11 @@ def entrypoint(args: Args) -> None:
             log.info("")
         _first = False
 
-        log.info(f"[{conn}] Scanning snapshot holds")
-        unhold_conn(cli=cli, datasets=datasets, filter=filter)
+        log.info(f"[{conn}] Scanning snapshot holds on {len(datasets.matched)} datasets")
+        unhold_conn(cli=cli, datasets=datasets, filter=filter, dry_run=args.dry_run)
 
 
-def unhold_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter):
+def unhold_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, dry_run: bool):
     snaps = fetch_snaps(cli, datasets, filter=filter)
 
     # Get hold tags and filter
@@ -37,6 +37,10 @@ def unhold_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter):
 
     # Print result
     print_result(release_holds, datasets=datasets, snaps=snaps)
+
+    if dry_run:
+        log.info(space(1) + f"Dry-run enabled, not releasing any holds")
+        return
 
     # Release holds
     total = len(release_holds)
@@ -63,7 +67,7 @@ def print_result(release_holds: set[Hold], datasets: ResolvedDatasets, snaps: li
             group_by(holds, lambda h: longname_to_snap[(dataset, h.snap_shortname)]),
             key=sortkey_snap_by_time
         )
-        log.info(space(2) + f"Release {len(holds)} holds:")
+        log.info(space(2) + f"Release {len(holds)} holds on {len(snap_to_holds)} snapshots:")
         for snap, _holds in snap_to_holds.items():
             _holds_str = ', '.join(h.tag for h in _holds)
             log.info(space(3) + f"{snap.shortname}: {_holds_str}")

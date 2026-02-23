@@ -1,4 +1,4 @@
-from typing import Optional, Any, TypeGuard
+from typing import Optional, Any, TypeGuard, Callable
 from collections.abc import Collection
 from dataclasses import dataclass
 from subprocess import CalledProcessError
@@ -99,7 +99,10 @@ def _print_group(keep: list[Snapshot], destroy: list[Snapshot], indent: int):
     log.info(space(indent) + f"Keep {len(keep)}")
     if destroy:
         log.info(space(indent) + f"Destroy {len(destroy)}:")
+        # Print a nice-looking list
+        fields: list[Callable[[Snapshot], str]] = [lambda s: str(s.timestamp), lambda s: str(s.dataset), lambda s: s.shortname]
+        widths: list[int] = [max(*(len(f(s)) for s in destroy), 0) for f in fields]
         for snap in destroy:
-            log.info(space(indent+1) + f'{snap.timestamp}  {snap.shortname}')
+            log.info(space(indent+1) + "  ".join(f(snap).ljust(w) for f, w in zip(fields, widths)))
     else:
         log.info(space(indent) + f"Destroy 0")

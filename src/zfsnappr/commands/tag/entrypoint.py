@@ -56,7 +56,7 @@ def entrypoint(args: Args) -> None:
             log.info("")
         _first = False
 
-        log.info(f"[{conn}] Scanning snapshot tags")
+        log.info(f"[{conn}] Scanning snapshot tags on {len(datasets.matched)} datasets")
         tag_conn(
             cli=cli,
             datasets=datasets,
