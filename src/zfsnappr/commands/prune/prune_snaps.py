@@ -84,7 +84,7 @@ def is_nogroup(
     policy_result: dict[Any, tuple[list[Snapshot], list[Snapshot]]],
     g: Grouper[Any]
 ) -> TypeGuard[dict[None, tuple[list[Snapshot], list[Snapshot]]]]:
-    return g is groupers.NOGROUP
+    return g is groupers.NOGROUP and len(policy_result) == 1 and None in policy_result
 
 
 def print_policy_result[G](policy_result: dict[G, tuple[list[Snapshot], list[Snapshot]]], grouper: Grouper[G]):

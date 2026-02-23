@@ -140,8 +140,13 @@ class Dataset:
 
 @dataclass(eq=True, frozen=True)
 class Hold:
-    snap_longname: str
+    dataset: Path
+    snap_shortname: str
     tag: str
+
+    @property
+    def snap_longname(self):
+        return f"{self.dataset}@{self.snap_shortname}"
 
 
 """
@@ -186,8 +191,10 @@ class ZfsCli(ABC):
             lines = self._run_text_command(['zfs', 'holds', '-H', *batch]).splitlines()
             for line in lines:
                 snapname, tag, _ = line.split('\t', 2)
+                dataset, shortname = snapname.split('@')
                 holds.add(Hold(
-                    snap_longname=snapname,
+                    dataset=Path(dataset),
+                    snap_shortname=shortname,
                     tag=tag
                 ))
         return holds

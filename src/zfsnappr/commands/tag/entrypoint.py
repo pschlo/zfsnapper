@@ -75,13 +75,10 @@ def tag_conn(
 ):
     # --- get snapshots ---
     snaps = fetch_snaps(cli, datasets, props=fetch_props, filter=filter)
-    if not snaps:
-        log.info(space(1) + f"No matching snapshots, nothing to do")
-        return
 
     # --- apply tag operations ---
     # SET sets the tags even if no new tags were found, while ADD and REMOVE leave the tags potentially unset, i.e. as None
-    for dataset, ds_snaps in group_by(snaps, key=lambda s: s.dataset).items():
+    for dataset, ds_snaps in group_by(snaps, key=lambda s: s.dataset, ensure_keys=datasets.p.matched).items():
         _has_updated_any = False
         log.info(space(1) + f"Dataset: {dataset}")
         for snap in ds_snaps:

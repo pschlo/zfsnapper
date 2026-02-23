@@ -34,7 +34,7 @@ def entrypoint(args: Args) -> None:
             log.info("")
         _first = False
 
-        log.info(f"Location: {conn}")
+        log.info(f"[{conn}] Scanning snapshots")
         list_conn(cli=cli, datasets=datasets, filter=filter, extend_holds=args.holds)
 
 
