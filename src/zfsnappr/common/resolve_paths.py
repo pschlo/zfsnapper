@@ -8,7 +8,7 @@ from .path import Path, EMPTY_PATH
 
 @dataclass(frozen=False, eq=False)
 class Node:
-    children: dict[str, "Node"] = field(default_factory=dict)
+    children: dict[str, Node] = field(default_factory=dict)
 
     exists: bool = False
     """Whether the path corresponds to existing dataset, or is just symbolic.
@@ -19,25 +19,21 @@ class Node:
     inc: bool = False
     exc: bool = False
 
-    # Each existing dataset is either kept, blocked, or unsel.
+    # Each node is either symbolic (not exists), matched, or unmatched.
     @property
-    def keep(self):
-        """Whether the dataset is finally kept or not."""
+    def matched(self):
+        """Dataset exists, was selected and was not excluded."""
         return self.exists and self.inc and not self.exc
     @property
-    def blocked(self):
-        return self.exists and self.exc
-    @property
-    def unsel(self):
-        """Used as an indicator for existing datasets that are not matched by the include/exclude policy."""
-        return self.exists and not self.inc and not self.exc
+    def unmatched(self):
+        """Dataset exists, but was not selected or was excluded."""
+        return self.exists and (not self.inc or self.exc)
 
     contains_inc: bool = False
     contains_exc : bool = False
 
-    contains_keep: bool = False
-    contains_blocked: bool = False
-    contains_unsel: bool = False
+    contains_matched: bool = False
+    contains_unmatched: bool = False
 
     in_inc_recurse_region: bool = False
     in_exc_recurse_region: bool = False
@@ -159,16 +155,12 @@ def resolve_paths(
         if par is not None:
             par.contains_inc |= node.inc or node.contains_inc
             par.contains_exc |= node.exc or node.contains_exc
-            par.contains_unsel |= node.unsel or node.contains_unsel
-            par.contains_keep |= node.keep or node.contains_keep
-            par.contains_blocked |= node.blocked or node.contains_blocked
+            par.contains_matched |= node.matched or node.contains_matched
+            par.contains_unmatched |= node.unmatched or node.contains_unmatched
 
 
     # Traverse trie from top to bottom
     # - find cover for nodes that are kept
-    # - relevant are: "keep", "contains_keep"
-    # (otherwise may pick group prefix that does not contain excs, but also does not cover any keeps and is thus obsolete)
-    # and "contains_exc"/"contains_unsel" (to know whether tree is safe or not)
     # NOTE: "include" and "exclude" must not exist and are purely symbolic, while "keep" and "unsel" must exist
 
     groups: set[Path] = set()
@@ -177,25 +169,25 @@ def resolve_paths(
     while queue:
         path, node = queue.popleft()
 
-        if not node.keep and not node.contains_keep:
-            # Subtree does not contain any keeps; irrelevant
+        if not node.matched and not node.contains_matched:
+            # Subtree does not contain any matches; irrelevant
             continue
 
-        # ASSERT: Node is directly kept or contains kept
+        # ASSERT: Node matched directly or contains matching
 
-        if node.blocked or node.unsel or (strict_exclude and node.exc):
+        if node.unmatched or (strict_exclude and node.exc):
             # Cannot pick as recursive group since node is blocked; descend
-            assert not node.keep
+            assert not node.matched
             for seg, child in node.children.items():
                 queue.append((path / seg, child))
             continue
 
         # ASSERT: Node is directly kept or contains kept, and is itself not illegal
 
-        if node.contains_blocked or node.contains_unsel or (strict_exclude and node.contains_exc):
+        if node.contains_unmatched or (strict_exclude and node.contains_exc):
             # Cannot pick as recursive group since node contains blocked; descend
             # If we need to keep this dataset (which itself is not blocked), it must be added as single
-            if node.keep:
+            if node.matched:
                 singles.add(path)
             for seg, child in node.children.items():
                 queue.append((path / seg, child))
@@ -208,7 +200,7 @@ def resolve_paths(
         # NOTE: node.in_inc_recurse_region IFF node path is at or under some path in included_recurse
         if conservative_grouping and not node.in_inc_recurse_region:
             # path is not under a recursively included path; to be safe, descend
-            if node.keep:
+            if node.matched:
                 singles.add(path)
             for seg, child in node.children.items():
                 queue.append((path / seg, child))
@@ -216,7 +208,7 @@ def resolve_paths(
 
         if path == EMPTY_PATH and not allow_root_group:
             # Cannot use empty path; must descend
-            assert not node.keep
+            assert not node.matched
             for seg, child in node.children.items():
                 queue.append((path / seg, child))
             continue
@@ -225,18 +217,18 @@ def resolve_paths(
         # If node does not have existing children, single vs group does not matter; we choose to treat as single.
         # NOTE: At this point, node contains no existing nodes IFF node contains no kept nodes
         #   Also: Node contains no kept nodes IMPLIES node is kept
-        if not node.contains_keep:
-            assert node.keep
+        if not node.contains_matched:
+            assert node.matched
             singles.add(path)
         else:
             groups.add(path)
 
 
     # Compute kept paths
-    kept_paths = {p for p in all_paths if get_node(p).keep}
+    matched_paths = {p for p in all_paths if get_node(p).matched}
 
     # Double-check that cover is complete
-    for p in kept_paths:
+    for p in matched_paths:
         # Either covered by single, or covered by exactly one group
         _covered_by_single = p in singles
         _covered_by_groups = sum(g.is_ancestor_of(p) for g in groups)
@@ -247,7 +239,7 @@ def resolve_paths(
         )
 
     return ResolvedPaths(
-        matched_paths=kept_paths,
+        matched_paths=matched_paths,
         explicit_paths=singles,
         recursive_roots=groups
     )
