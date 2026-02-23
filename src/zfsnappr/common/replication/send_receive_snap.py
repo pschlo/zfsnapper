@@ -124,7 +124,8 @@ def _send_receive(
         if isinstance(e, KeyboardInterrupt):
             raise e
         raise ReplicationError(
-            f"Replication of snapshot '{snapshot.shortname}' from '{snapshot.dataset}' to '{dest_dataset}' failed"
+            f"Replication of snapshot '{snapshot.shortname}' from '{snapshot.dataset}' to '{dest_dataset}' failed",
+            log_indent=log_indent
         ) from e
 
 

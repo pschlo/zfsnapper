@@ -96,7 +96,7 @@ def push_conn(
             if destpath in missing_dest_paths:
                 # Dest dataset does not exist; cannot fetch snapshots.
                 if not allow_initialize:
-                    raise ReplicationError(f"Destination dataset '{destpath}' does not exist and will not be created")
+                    raise ReplicationError(f"Destination dataset '{destpath}' does not exist and will not be created", log_indent=2)
                 # Do initial send-receive to create dest dataset.
                 replicate_snaps_initial(
                     source_cli=src_cli,
@@ -120,7 +120,7 @@ def push_conn(
                 )
         except ReplicationError as e:
             is_error = True
-            log.error(e)
+            log.error(space(e.log_indent) + str(e))
 
     if is_error:
         raise ReplicationError(f"Replication failed for one or more datasets")

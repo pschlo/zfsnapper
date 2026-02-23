@@ -123,13 +123,13 @@ def replicate_snaps_incremental(
     )
 
     if not dest_snaps:
-        raise ReplicationError(f"Destination '{dest_dataset}' does not contain any snapshots")
+        raise ReplicationError(f"Destination '{dest_dataset}' does not contain any snapshots", log_indent=log_indent)
 
     # figure out base index
     if base_snap is None:
-        raise ReplicationError(f"Source '{source_dataset}' and destination '{dest_dataset}' have no common snapshot")
+        raise ReplicationError(f"Source '{source_dataset}' and destination '{dest_dataset}' have no common snapshot", log_indent=log_indent)
     if base_snap[1].guid != dest_snaps[0].guid:
-        raise ReplicationError(f"Destination '{dest_dataset}' has snapshots newer than latest common snapshot '{base_snap[1].shortname}'")
+        raise ReplicationError(f"Destination '{dest_dataset}' has snapshots newer than latest common snapshot '{base_snap[1].shortname}'", log_indent=log_indent)
     base_index = next(i for i, s in enumerate(source_snaps) if s.guid == base_snap[0].guid)
 
     # Ensure base snapshot on dest has correct tags; this may help if previous replication was aborted before tags could be set
@@ -156,7 +156,8 @@ def replicate_snaps_incremental(
             # Snapshot B cannot be sent
             raise ReplicationError(
                 f"Cannot transfer snapshots from '{source_dataset}' to '{dest_dataset}': "
-                f"snapshot '{b.shortname}' shares timestamp with predecessor '{a.shortname}'"
+                f"snapshot '{b.shortname}' shares timestamp with predecessor '{a.shortname}'",
+                log_indent=log_indent
             )
 
 
