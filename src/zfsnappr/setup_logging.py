@@ -162,6 +162,9 @@ class LeveledFormatter(Formatter):
 class IndentedFormatter(Formatter):
     def format(self, record):
         orig_msg = record.msg
+        if not isinstance(orig_msg, str):
+            return super().format(record)
+
         stripped = orig_msg.lstrip(" ")
         num_spaces = len(orig_msg) - len(stripped)
         

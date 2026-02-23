@@ -21,6 +21,10 @@ class groupers:
         groupkey=lambda s: s.dataset,
         sortkey=sortkey_dataset
     )
+    NOGROUP = Grouper[None](
+        name="nogroup",
+        groupkey=lambda s: None
+    )
   # TAG = Grouper[int](
   #   name="tag",
   #   groupkey=lambda s: 3,

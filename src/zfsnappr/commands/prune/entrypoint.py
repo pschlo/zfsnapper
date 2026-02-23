@@ -40,11 +40,11 @@ def entrypoint(args: Args):
     )
 
     # Determine grouper
-    grouper: Grouper | None
+    grouper: Grouper
     if args.group_by == 'dataset':
         grouper = groupers.DATASET
     elif args.group_by == '':
-        grouper = None
+        grouper = groupers.NOGROUP
     else:
         assert False
 
@@ -74,7 +74,7 @@ def prune_conn(
     conn: ConnSpec,
     datasets: ResolvedDatasets,
     policy: KeepPolicy,
-    grouper: Grouper | None,
+    grouper: Grouper,
     filter: SnapFilter,
     allow_destroy_all: bool,
     dry_run: bool

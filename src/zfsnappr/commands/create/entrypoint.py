@@ -39,6 +39,6 @@ def entrypoint(args: Args) -> None:
             }
         )
 
-        log.info(f"[{conn}] Created snapshots of {len(datasets.matched)} datasets: {shortname}")
+        log.info(f"[{conn}] Created snapshots {shortname} of {len(datasets.matched)} datasets:")
         for dataset in sorted(datasets.matched, key=sortkey_dataset):
             log.info(space(1) + f"{dataset.path}")
