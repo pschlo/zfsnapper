@@ -20,14 +20,8 @@ class Policy:
 @dataclass
 class ResolvedDatasets:
     datasets: set[Dataset]
-    paths: set[Path]
-
     explicit_datasets: set[Dataset]
-    explicit_paths: set[Path]
-
-    recursive_root_datasets: set[Dataset]
-    recursive_root_paths: set[Path]
-
+    recursive_roots: set[Dataset]
     path_to_dataset: dict[Path, Dataset]
 
     p: ResolvedPaths
@@ -70,7 +64,7 @@ def resolve_dataset_specs(
         raise ValueError(f"No dataset locations specified")
     if diff := exc_conns - inc_conns:
         raise ValueError(f"Location '{next(iter(diff))}' is only used for exclusion")
-    
+
     # Sort conns for determinism
     conns = sort_conns(inc_conns)
 
@@ -143,15 +137,9 @@ def resolve_conn_datasets(
     # Reconstruct datasets
     resolved_datasets = ResolvedDatasets(
         datasets={path_to_dataset[p] for p in resolved_paths.paths},
-        paths=resolved_paths.paths,
-
         explicit_datasets={path_to_dataset[p] for p in resolved_paths.explicit_paths},
-        explicit_paths=resolved_paths.explicit_paths,
-
         # In ZFS, parents must exist, so this is safe
-        recursive_root_datasets={path_to_dataset[p] for p in resolved_paths.recursive_roots},
-        recursive_root_paths=resolved_paths.recursive_roots,
-
+        recursive_roots={path_to_dataset[p] for p in resolved_paths.recursive_roots},
         path_to_dataset=path_to_dataset,
         p=resolved_paths
     )

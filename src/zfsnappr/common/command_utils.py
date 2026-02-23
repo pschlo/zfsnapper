@@ -53,7 +53,7 @@ def fetch_snaps(
     Snapshots are sorted by creation time (ascending order) and optionally filtered.
     """
     snaps = [
-        *cli.get_all_snapshots([d.path for d in datasets.recursive_root_datasets], properties=props, recursive=True),
+        *cli.get_all_snapshots([d.path for d in datasets.recursive_roots], properties=props, recursive=True),
         *cli.get_all_snapshots([d.path for d in datasets.explicit_datasets], properties=props, recursive=False)
     ]
     snaps = filter.apply(snaps)
