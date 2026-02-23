@@ -39,9 +39,8 @@ class ZfsDatasetType(StrEnum):
 REQUIRED_PROPS = [ZfsProperty.NAME, ZfsProperty.CREATION, ZfsProperty.GUID, ZfsProperty.CUSTOM_TAGS, ZfsProperty.USERREFS, ZfsProperty.TYPE]
 
 
+@dataclass(eq=False)
 class Snapshot:
-    properties: dict[str, str]
-
     dataset: Path
     shortname: str
     guid: int
@@ -49,63 +48,89 @@ class Snapshot:
     tags: frozenset[str] | None
     holds: int
 
-    def __init__(self, properties: dict[str, str]):
+    def __repr__(self) -> str:
+        return f"Snapshot({self.longname})"
+
+    @classmethod
+    def from_props(cls, properties: dict[str, str]):
         P = ZfsProperty
         ps = properties
 
-        self.properties = ps
-        dataset_name, self.shortname = ps[P.NAME].split('@')
-        self.dataset = Path(dataset_name)
-        self.guid = int(ps[P.GUID])
-        self.timestamp = datetime.fromtimestamp(int(ps[P.CREATION]))
-        self.holds = int(ps[P.USERREFS])
+        dataset_name, shortname = ps[P.NAME].split('@')
+        dataset = Path(dataset_name)
+        guid = int(ps[P.GUID])
+        timestamp = datetime.fromtimestamp(int(ps[P.CREATION]))
+        holds = int(ps[P.USERREFS])
 
         if ps[P.CUSTOM_TAGS] == '-':
-            self.tags = None
+            tags = None
         else:
-            self.tags = frozenset(t for t in ps[P.CUSTOM_TAGS].split(',') if t)  # ignore empty tags
+            tags = frozenset(t for t in ps[P.CUSTOM_TAGS].split(',') if t)  # ignore empty tags
 
-    def __repr__(self) -> str:
-        return f"Snapshot({self.properties})"
+        return cls(
+            dataset=dataset,
+            shortname=shortname,
+            guid=guid,
+            timestamp=timestamp,
+            tags=tags,
+            holds=holds
+        )
 
     @property
     def longname(self):
         return f'{self.dataset}@{self.shortname}'
     
     def with_dataset(self, dataset: Path | str) -> Snapshot:
-        new_props = self.properties.copy()
-        new_props[ZfsProperty.NAME] = f"{dataset}@{self.shortname}"
-        return Snapshot(new_props)
+        return Snapshot(
+            dataset=Path(dataset),
+            shortname=self.shortname,
+            guid=self.guid,
+            timestamp=self.timestamp,
+            tags=self.tags,
+            holds=self.holds
+        )
 
     def with_shortname(self, shortname: str) -> Snapshot:
-        new_props = self.properties.copy()
-        new_props[ZfsProperty.NAME] = f"{self.dataset}@{shortname}"
-        return Snapshot(new_props)
+        return Snapshot(
+            dataset=self.dataset,
+            shortname=shortname,
+            guid=self.guid,
+            timestamp=self.timestamp,
+            tags=self.tags,
+            holds=self.holds
+        )
 
 
-@dataclass(eq=True, frozen=True)
+@dataclass(eq=False)
 class Pool:
     name: str
     guid: int
 
-class Dataset:
-    properties: dict[str, str]
 
+@dataclass(eq=False)
+class Dataset:
     path: Path
     guid: int
     type: ZfsDatasetType
 
-    def __init__(self, properties: dict[str,str]):
+    def __repr__(self) -> str:
+        return f"Dataset({self.path})"
+
+    @classmethod
+    def from_props(cls, properties: dict[str, str]):
         P = ZfsProperty
         ps = properties
 
-        self.properties = ps
-        self.path = Path(ps[P.NAME])
-        self.guid = int(ps[P.GUID])
-        self.type = ZfsDatasetType(ps[P.TYPE])
+        path = Path(ps[P.NAME])
+        guid = int(ps[P.GUID])
+        type = ZfsDatasetType(ps[P.TYPE])
 
-    def __repr__(self) -> str:
-        return f"Dataset({self.properties})"
+        return Dataset(
+            path=path,
+            guid=guid,
+            type=type
+        )
+
 
 @dataclass(eq=True, frozen=True)
 class Hold:
@@ -198,7 +223,7 @@ class ZfsCli(ABC):
         datasets: list[Dataset] = []
         for i in range(len(paths)):
             props = {p: v for p, v in zip(properties, lines[i*len(properties):(i+1)*len(properties)])}
-            datasets.append(Dataset(props))
+            datasets.append(Dataset.from_props(props))
         return datasets
 
 
@@ -230,7 +255,7 @@ class ZfsCli(ABC):
         _datasets: list[Dataset] = []
         for line in lines:
             props = {p: v for p, v in zip(properties, line.split('\t'))}
-            _datasets.append(Dataset(props))
+            _datasets.append(Dataset.from_props(props))
     
         return _datasets
   
@@ -258,7 +283,7 @@ class ZfsCli(ABC):
         snaps: list[Snapshot] = []
         for i in range(len(fullnames)):
             props = {p: v for p, v in zip(properties, lines[i*len(properties):(i+1)*len(properties)])}
-            snaps.append(Snapshot(props))
+            snaps.append(Snapshot.from_props(props))
         return snaps
 
     def get_all_snapshots(
@@ -283,7 +308,7 @@ class ZfsCli(ABC):
         snapshots: list[Snapshot] = []
         for line in lines:
             props = {p: v for p, v in zip(properties, line.split('\t'))}
-            snapshots.append(Snapshot(props))
+            snapshots.append(Snapshot.from_props(props))
 
         return snapshots
 
