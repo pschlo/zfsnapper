@@ -7,6 +7,7 @@ from zfsnappr.common.zfs import ZfsProperty, ZfsCli, Dataset, Snapshot
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
 from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
 from zfsnappr.common.filter import SnapFilter
+from zfsnappr.common.parse_dataset_arg import ConnSpec
 
 from .policy import KeepPolicy
 from .prune_snaps import prune_snapshots
@@ -56,10 +57,10 @@ def entrypoint(args: Args):
             log.info("")
         _first = False
 
-        log.info(f"Location: {conn}")
         prune_conn(
             cli=cli,
             datasets=datasets,
+            conn=conn,
             policy=policy,
             grouper=grouper,
             filter=filter,
@@ -70,6 +71,7 @@ def entrypoint(args: Args):
 
 def prune_conn(
     cli: ZfsCli,
+    conn: ConnSpec,
     datasets: ResolvedDatasets,
     policy: KeepPolicy,
     grouper: Grouper | None,
@@ -80,13 +82,14 @@ def prune_conn(
     # Fetch all snapshots for all datasets
     snaps = fetch_snaps(cli, datasets, filter=filter)
     if not snaps:
-        log.info(f"No matching snapshots, nothing to do")
+        log.info(f"[{conn}] No matching snapshots, nothing to do")
         return
 
     prune_snapshots(
         cli,
         snaps,
         policy,
+        conn=conn,
         dry_run=dry_run,
         grouper=grouper,
         allow_destroy_all=allow_destroy_all

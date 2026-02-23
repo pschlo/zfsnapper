@@ -6,6 +6,8 @@ from logging import Formatter, Logger, StreamHandler
 
 _Level = int | str
 
+ALL_LEVELS = tuple(logging.getLevelNamesMapping().values())
+
 
 class ProtectedLogger(Logger):
     """A Logger whose level can only be set by calling `setLevel(..., force=True)`.
@@ -105,8 +107,10 @@ def _setup_root_logger(loglevel: int):
     rootlog.setLevel(loglevel)
 
     # configure formatter
-    formatter = LeveledFormatter('%(levelname)s: %(message)s', '%H:%M:%S')
-    formatter.set_formatter(logging.INFO, Formatter())
+    formatter = LeveledFormatter({
+        ALL_LEVELS: IndentedFormatter('%(levelname)s: %(message)s', '%H:%M:%S'),
+        logging.INFO: Formatter()
+    })
 
     # configure stream handler
     stream_handler = StreamHandler()
@@ -133,11 +137,35 @@ def _setup_root_logger(loglevel: int):
 
 
 class LeveledFormatter(Formatter):
-    _formats: dict[int, Formatter] = {}
-    
-    def set_formatter(self, level: int, formatter: Formatter):
-        self._formats[level] = formatter
-    
+    _formats: dict[int, Formatter]
+
+    def __init__(self, formatters: dict[int | Collection[int], Formatter]) -> None:
+        self._formats = dict()
+        all_levels = set(logging.getLevelNamesMapping().values())
+        for level, fmt in formatters.items():
+            self.set_formatter(level, fmt)
+        if diff := all_levels - self._formats.keys():
+            name = logging.getLevelName(next(iter(diff)))
+            raise ValueError(f"LeveledFormatter missing formatter for level: {name}")
+
+    def set_formatter(self, level: int | Collection[int], formatter: Formatter):
+        if isinstance(level, int):
+            level = [level]
+        for lv in level:
+            self._formats[lv] = formatter
+
     def format(self, record):
-        formatter = self._formats.get(record.levelno) or super()
+        formatter = self._formats[record.levelno]
         return formatter.format(record)
+
+
+class IndentedFormatter(Formatter):
+    def format(self, record):
+        orig_msg = record.msg
+        stripped = orig_msg.lstrip(" ")
+        num_spaces = len(orig_msg) - len(stripped)
+        
+        record.msg = stripped
+        res = super().format(record)
+        record.msg = orig_msg
+        return " " * num_spaces + res
