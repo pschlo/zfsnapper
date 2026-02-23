@@ -2,8 +2,6 @@ from __future__ import annotations
 from typing import overload, SupportsIndex
 from collections.abc import Collection
 
-from .utils import longest_common_prefix
-
 
 class PathError(Exception):
     pass
@@ -63,7 +61,3 @@ class Path(tuple[str, ...]):
 
 
 EMPTY_PATH: Path = Path()
-
-
-def longest_common_ancestor(paths: Collection[Path]) -> Path:
-    return Path(*longest_common_prefix(*paths))

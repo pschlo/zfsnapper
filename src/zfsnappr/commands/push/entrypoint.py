@@ -5,7 +5,7 @@ from zfsnappr.common.replication import ReplicationError, replicate_snaps_initia
 from zfsnappr.common.resolve_datasets import ResolvedDatasets, create_zfs_cli, resolve_conn_datasets
 from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg, DatasetSpec, ConnSpec
-from zfsnappr.common.path import Path, longest_common_ancestor
+from zfsnappr.common.path import Path
 from zfsnappr.common.zfs import ZfsCli
 from zfsnappr.common.utils import group_by, combine_dicts, space
 from .args import Args
@@ -54,13 +54,13 @@ def push_conn(
         return space(level)
 
     # Find longest common src prefix; may be empty path
-    src_root = longest_common_ancestor(src_datasets.matched_paths)
+    src_root = src_datasets.p.deepest_common_ancestor
     log.info(f"Replicating: {src_conn}/{src_root} → {dst_conn}/{dest_root}")
 
     # Create matching of source dataset to dest dataset
     srcpath_to_destpath = {
         src_path: dest_root / src_path.relative_to(src_root)
-        for src_path in sorted(src_datasets.matched_paths, key=lambda p: p.depth)
+        for src_path in sorted(src_datasets.paths, key=lambda p: p.depth)
     }
 
     # Determine corresponding dest datasets
@@ -71,18 +71,18 @@ def push_conn(
     )
 
     # Determine missing dest datasets
-    missing_dest_paths = set(srcpath_to_destpath.values()) - dest_datasets.matched_paths
+    missing_dest_paths = set(srcpath_to_destpath.values()) - dest_datasets.paths
 
     # Fetch all snapshots.
     srcpath_to_snaps = group_by(
         fetch_snaps(cli=src_cli, datasets=src_datasets),
         lambda s: s.dataset,
-        ensure_keys=src_datasets.matched_paths
+        ensure_keys=src_datasets.paths
     )
     destpath_to_snaps = group_by(
         fetch_snaps(cli=dest_cli, datasets=dest_datasets),
         lambda s: s.dataset,
-        ensure_keys=dest_datasets.matched_paths
+        ensure_keys=dest_datasets.paths
     )
 
     # Replicate dataset-by-dataset

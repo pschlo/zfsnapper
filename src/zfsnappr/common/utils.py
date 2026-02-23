@@ -45,11 +45,5 @@ def sort_dict[K, V](dict_: dict[K, V], key: Callable[[K], Any], reverse: bool = 
     return {k: dict_[k] for k in sorted_keys}
 
 
-def longest_common_prefix[T](*sequences: Sequence[T]) -> tuple[T, ...]:
-    cols = zip(*sequences)  # stops at shortest path automatically
-    common = (col[0] for col in takewhile(lambda col: all(x == col[0] for x in col), cols))
-    return tuple(common)
-
-
 def space(num: int):
     return " " * (4 * num)

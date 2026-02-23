@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from collections.abc import Collection
 
 from .zfs import ZfsCli, Dataset, RemoteZfsCli, LocalZfsCli
-from .resolve_paths import resolve_paths
+from .resolve_paths import resolve_paths, ResolvedPaths
 from .path import Path
 from .parse_dataset_arg import parse_dataset_arg, ConnSpec, DatasetSpec
 from .utils import group_by, combine_dicts
@@ -19,8 +19,8 @@ class Policy:
 
 @dataclass
 class ResolvedDatasets:
-    matched_datasets: set[Dataset]
-    matched_paths: set[Path]
+    datasets: set[Dataset]
+    paths: set[Path]
 
     explicit_datasets: set[Dataset]
     explicit_paths: set[Path]
@@ -29,6 +29,8 @@ class ResolvedDatasets:
     recursive_root_paths: set[Path]
 
     path_to_dataset: dict[Path, Dataset]
+
+    p: ResolvedPaths
 
 
 def create_zfs_cli(conn: ConnSpec) -> ZfsCli:
@@ -99,12 +101,12 @@ def resolve_dataset_specs(
         )
 
         # Ensure there are kept datasets
-        if not resolved_datasets.matched_datasets:
+        if not resolved_datasets.datasets:
             raise ValueError(f"Resolving datasets for location '{conn}' yielded no datasets")
 
         # Ensure all explicitly included datasets are kept, to avoid surprises
         _inc_exact = {p for p in policy.include_exact if p}
-        _kept_paths = {d.path for d in resolved_datasets.matched_datasets}
+        _kept_paths = {d.path for d in resolved_datasets.datasets}
         if diff := _inc_exact - _kept_paths:
             ds = next(iter(diff))
             raise ValueError(f"Dataset '{conn}/{ds}' is no longer included in resolved datasets")
@@ -140,8 +142,8 @@ def resolve_conn_datasets(
 
     # Reconstruct datasets
     resolved_datasets = ResolvedDatasets(
-        matched_datasets={path_to_dataset[p] for p in resolved_paths.matched_paths},
-        matched_paths=resolved_paths.matched_paths,
+        datasets={path_to_dataset[p] for p in resolved_paths.paths},
+        paths=resolved_paths.paths,
 
         explicit_datasets={path_to_dataset[p] for p in resolved_paths.explicit_paths},
         explicit_paths=resolved_paths.explicit_paths,
@@ -151,6 +153,7 @@ def resolve_conn_datasets(
         recursive_root_paths=resolved_paths.recursive_roots,
 
         path_to_dataset=path_to_dataset,
+        p=resolved_paths
     )
 
     return resolved_datasets

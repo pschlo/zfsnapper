@@ -41,9 +41,10 @@ class Node:
 
 @dataclass
 class ResolvedPaths:
-    matched_paths: set[Path]
+    paths: set[Path]
     recursive_roots: set[Path]
     explicit_paths: set[Path]
+    deepest_common_ancestor: Path
 
 
 def resolve_paths(
@@ -224,6 +225,9 @@ def resolve_paths(
             groups.add(path)
 
 
+    # Find deepest common ancestor
+    _deepest_common_ancestor = deepest_common_ancestor(root)
+
     # Compute kept paths
     matched_paths = {p for p in all_paths if get_node(p).matched}
 
@@ -239,7 +243,34 @@ def resolve_paths(
         )
 
     return ResolvedPaths(
-        matched_paths=matched_paths,
+        paths=matched_paths,
         explicit_paths=singles,
-        recursive_roots=groups
+        recursive_roots=groups,
+        deepest_common_ancestor=_deepest_common_ancestor
     )
+
+
+
+def deepest_common_ancestor(root: Node) -> Path:
+    prefix = Path()
+    node = root
+
+    while not node.matched:
+        only_edge: tuple[str, Node] | None = None
+
+        for seg, child in node.children.items():
+            if child.matched or child.contains_matched:
+                # Viable edge
+                if only_edge is not None:
+                    # Found a second viable branch => split
+                    return prefix
+                only_edge = seg, child
+
+        if only_edge is None:
+            # No viable continuation
+            return prefix
+
+        prefix /= only_edge[0]
+        node = only_edge[1]
+
+    return prefix
