@@ -97,12 +97,6 @@ def resolve_paths(
             n = n.children.setdefault(seg, Node())
         return n
 
-    def get_node(path: Path) -> Node:
-        n = root
-        for seg in path:
-            n = n.children[seg]
-        return n
-
     included_exact = set(included_exact)
     included_recurse = set(included_recurse)
     excluded_exact = set(excluded_exact)
@@ -111,11 +105,9 @@ def resolve_paths(
     if EMPTY_PATH in all_paths:
         raise ValueError(f"A dataset with an empty path cannot exist")
 
-    # Create all nodes
+    # Create all nodes and mark
     for p in all_paths:
         ensure_node(p).exists = True
-
-    # Mark terminals
     for p in included_exact:
         ensure_node(p).inc = True
     for p in included_recurse:
@@ -125,22 +117,54 @@ def resolve_paths(
     for p in excluded_recurse:
         ensure_node(p).in_exc_recurse_region = True
 
+    # Propagate information
+    propagate_inc_exc(root)
+    propagate_contains(root)
 
-    # ---- Iterative top-down propagation for ancestor-blocking ----
-    # Propagate inclusions and exclusions
-    _q = deque([root])
-    while _q:
-        node = _q.popleft()
-        node.inc |= node.in_inc_recurse_region
-        node.exc |= node.in_exc_recurse_region
+    # Find node cover
+    singles, groups = find_cover(
+        root,
+        strict_exclude=strict_exclude,
+        conservative_grouping=conservative_grouping,
+        allow_root_group=allow_root_group
+    )
 
+    # Find deepest common ancestor
+    _deepest_common_ancestor = deepest_common_ancestor(root)
+
+    # Collect matched paths
+    matched_paths = collect_matched_paths(root)
+
+    # Assert that node cover is correct
+    assert_cover(matched_paths, singles, groups)
+
+    return ResolvedPaths(
+        paths=matched_paths,
+        explicit_paths=singles,
+        recursive_roots=groups,
+        deepest_common_ancestor=_deepest_common_ancestor
+    )
+
+
+def collect_matched_paths(root: Node) -> set[Path]:
+    out: set[Path] = set()
+    q: deque[tuple[Node, Path]] = deque([(root, EMPTY_PATH)])
+
+    while q:
+        node, path = q.popleft()
+        # Prune entire subtree if nothing matched here or below
+        if not (node.matched or node.contains_matched):
+            continue
+        if node.matched:
+            out.add(path)
         for seg, child in node.children.items():
-            child.in_inc_recurse_region |= node.in_inc_recurse_region
-            child.in_exc_recurse_region |= node.in_exc_recurse_region
-            _q.append(child)
+            q.append((child, path / seg))
+
+    return out
 
 
-    # ---- Iterative bottom-up propagation ----
+def propagate_contains(root: Node):
+    """Bottom-up"""
     # Gather nodes with their parents in a BFS, then process deepest-first.
     entries: list[tuple[Node, Node | None]] = []
     q: deque[tuple[Node, Node | None]] = deque([(root, None)])
@@ -160,12 +184,40 @@ def resolve_paths(
             par.contains_unmatched |= node.unmatched or node.contains_unmatched
 
 
+def propagate_inc_exc(root: Node):
+    """Top-down"""
+    q = deque([root])
+    while q:
+        node = q.popleft()
+        node.inc |= node.in_inc_recurse_region
+        node.exc |= node.in_exc_recurse_region
+
+        for seg, child in node.children.items():
+            child.in_inc_recurse_region |= node.in_inc_recurse_region
+            child.in_exc_recurse_region |= node.in_exc_recurse_region
+            q.append(child)
+
+
+def assert_cover(paths: set[Path], singles: set[Path], groups: set[Path]):
+    # Double-check that cover is complete
+    for p in paths:
+        # Either covered by single, or covered by exactly one group
+        _covered_by_single = p in singles
+        _covered_by_groups = sum(g.is_ancestor_of(p) for g in groups)
+        assert (
+            (_covered_by_single and _covered_by_groups == 0)
+            or
+            (not _covered_by_single and _covered_by_groups == 1)
+        )
+
+
+def find_cover(root: Node, strict_exclude: bool, conservative_grouping: bool, allow_root_group: bool) -> tuple[set[Path], set[Path]]:
     # Traverse trie from top to bottom
     # - find cover for nodes that are kept
     # NOTE: "include" and "exclude" must not exist and are purely symbolic, while "keep" and "unsel" must exist
 
-    groups: set[Path] = set()
     singles: set[Path] = set()
+    groups: set[Path] = set()
     queue: deque[tuple[Path, Node]] = deque([(EMPTY_PATH, root)])
     while queue:
         path, node = queue.popleft()
@@ -224,31 +276,7 @@ def resolve_paths(
         else:
             groups.add(path)
 
-
-    # Find deepest common ancestor
-    _deepest_common_ancestor = deepest_common_ancestor(root)
-
-    # Compute kept paths
-    matched_paths = {p for p in all_paths if get_node(p).matched}
-
-    # Double-check that cover is complete
-    for p in matched_paths:
-        # Either covered by single, or covered by exactly one group
-        _covered_by_single = p in singles
-        _covered_by_groups = sum(g.is_ancestor_of(p) for g in groups)
-        assert (
-            (_covered_by_single and _covered_by_groups == 0)
-            or
-            (not _covered_by_single and _covered_by_groups == 1)
-        )
-
-    return ResolvedPaths(
-        paths=matched_paths,
-        explicit_paths=singles,
-        recursive_roots=groups,
-        deepest_common_ancestor=_deepest_common_ancestor
-    )
-
+    return singles, groups
 
 
 def deepest_common_ancestor(root: Node) -> Path:
