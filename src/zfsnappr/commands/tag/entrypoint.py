@@ -6,6 +6,7 @@ import logging
 from zfsnappr.common.zfs import Snapshot, ZfsCli
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
 from zfsnappr.common.filter import SnapFilter
+from zfsnappr.common.utils import space, group_by
 from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
 from .args import Args
 
@@ -55,7 +56,7 @@ def entrypoint(args: Args) -> None:
             log.info("")
         _first = False
 
-        log.info(f"Location: {conn}")
+        log.info(f"[{conn}] Scanning snapshot tags")
         tag_conn(
             cli=cli,
             datasets=datasets,
@@ -75,39 +76,47 @@ def tag_conn(
     # --- get snapshots ---
     snaps = fetch_snaps(cli, datasets, props=fetch_props, filter=filter)
     if not snaps:
-        log.info(f"No matching snapshots, nothing to do")
+        log.info(space(1) + f"No matching snapshots, nothing to do")
         return
 
     # --- apply tag operations ---
     # SET sets the tags even if no new tags were found, while ADD and REMOVE leave the tags potentially unset, i.e. as None
-    _has_updated_any = False
-    for snap in snaps:
-        original_tags = snap.tags
-        tags = original_tags  # working set that gets updated by operations
+    for dataset, ds_snaps in group_by(snaps, key=lambda s: s.dataset).items():
+        _has_updated_any = False
+        log.info(space(1) + f"Dataset: {dataset}")
+        for snap in ds_snaps:
+            _has_updated_any |= tag_snap(snap, operations, cli=cli)
 
-        for get_tags, action in operations:
-            new_tags = get_tags(snap)
+        if not _has_updated_any:
+            log.info(space(2) + f"No tags updated")
 
-            match action:
-                case 'SET':
-                    tags = new_tags or set()
-                case 'ADD':
-                    if new_tags is not None:
-                        tags = (tags or set()) | new_tags
-                case 'REMOVE':
-                    if new_tags is not None:
-                        tags = (tags or set()) - new_tags
-                case _:
-                    assert False
 
-        # Apply once per snapshot
-        if tags != original_tags and tags is not None:
-            cli.set_tags(snap.longname, tags)
-            _has_updated_any = True
-            log.info(f"Updated tags for snapshot '{snap.shortname}' of dataset '{snap.dataset}'")
+def tag_snap(snap: Snapshot, operations: list[Operation], cli: ZfsCli) -> bool:
+    """Return `True` if tags had to be updated, else `False`."""
+    original_tags = snap.tags
+    tags = original_tags  # working set that gets updated by operations
 
-    if not _has_updated_any:
-        log.info(f"Did not need to update any tags")
+    for get_tags, action in operations:
+        new_tags = get_tags(snap)
+
+        match action:
+            case 'SET':
+                tags = new_tags or set()
+            case 'ADD':
+                if new_tags is not None:
+                    tags = (tags or set()) | new_tags
+            case 'REMOVE':
+                if new_tags is not None:
+                    tags = (tags or set()) - new_tags
+            case _:
+                assert False
+
+    # Apply once per snapshot
+    if tags != original_tags and tags is not None:
+        cli.set_tags(snap.longname, tags)
+        log.info(space(2) + f"Updated tags for snapshot: {snap.shortname}")
+        return True
+    return False
 
 
 def get_from_prop(snap: Snapshot, property: str) -> set[str] | None:

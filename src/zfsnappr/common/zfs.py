@@ -48,6 +48,9 @@ class Snapshot:
     tags: frozenset[str] | None
     holds: int
 
+    properties: dict[str, str]
+    """Properties as fetched from ZFS; may be outdated."""
+
     def __repr__(self) -> str:
         return f"Snapshot({self.longname})"
 
@@ -73,7 +76,8 @@ class Snapshot:
             guid=guid,
             timestamp=timestamp,
             tags=tags,
-            holds=holds
+            holds=holds,
+            properties=ps
         )
 
     @property
@@ -87,7 +91,8 @@ class Snapshot:
             guid=self.guid,
             timestamp=self.timestamp,
             tags=self.tags,
-            holds=self.holds
+            holds=self.holds,
+            properties=self.properties
         )
 
     def with_shortname(self, shortname: str) -> Snapshot:
@@ -97,7 +102,8 @@ class Snapshot:
             guid=self.guid,
             timestamp=self.timestamp,
             tags=self.tags,
-            holds=self.holds
+            holds=self.holds,
+            properties=self.properties
         )
 
 
