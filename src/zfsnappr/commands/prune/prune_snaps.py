@@ -55,10 +55,10 @@ def prune_snapshots[G](
     if not keep and not allow_destroy_all:
         raise RuntimeError(f"Refusing to destroy all snapshots")
     if not destroy:
-        log.info(space(2) + "No snapshots to destroy")
+        log.info(space(1) + "No snapshots to destroy")
         return
     if dry_run:
-        log.info(space(2) + "Dry-run enabled, not destroying any snapshots")
+        log.info(space(1) + "Dry-run enabled, not destroying any snapshots")
         return
 
     log.info(space(1) + f'Destroying {len(destroy)} snapshots on {len({s.dataset for s in destroy})} datasets')
