@@ -6,7 +6,7 @@ from itertools import pairwise
 from zfsnappr.common.zfs import Snapshot, ZfsCli, Dataset
 from zfsnappr.common.replication.exception import ReplicationError
 from zfsnappr.common.path import Path
-from zfsnappr.common.sort import sort_snaps_by_time
+from zfsnappr.common.sort import sortkey_snap_by_time
 from zfsnappr.common.utils import space
 
 from .send_receive_snap import send_receive_incremental, send_receive_initial
@@ -34,7 +34,7 @@ def replicate_snaps_initial(
         return space(log_indent + level)
 
     # sorting is required
-    source_snaps = sort_snaps_by_time(source_snaps, reverse=True)
+    source_snaps = sorted(source_snaps, key=sortkey_snap_by_time, reverse=True)
 
     _rel_dest = dest_dataset.relative_to(dest_root)
     log.info(_s() + f"Creating destination dataset by transferring oldest snapshot")
@@ -99,8 +99,8 @@ def replicate_snaps_incremental(
     assert all(s.dataset == dest_dataset for s in dest_snaps)
 
     # sorting is required
-    source_snaps = sort_snaps_by_time(source_snaps, reverse=True)
-    dest_snaps = sort_snaps_by_time(dest_snaps, reverse=True)
+    source_snaps = sorted(source_snaps, key=sortkey_snap_by_time, reverse=True)
+    dest_snaps = sorted(dest_snaps, key=sortkey_snap_by_time, reverse=True)
 
 
     ##### PHASE 1: Critical preparation, check for abort conditions

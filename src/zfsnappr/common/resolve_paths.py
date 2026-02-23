@@ -41,9 +41,9 @@ class Node:
 
 @dataclass
 class ResolvedPaths:
-    paths: set[Path]
+    matched: set[Path]
+    explicit: set[Path]
     recursive_roots: set[Path]
-    explicit_paths: set[Path]
     deepest_common_ancestor: Path
 
 
@@ -139,8 +139,8 @@ def resolve_paths(
     assert_cover(matched_paths, singles, groups)
 
     return ResolvedPaths(
-        paths=matched_paths,
-        explicit_paths=singles,
+        matched=matched_paths,
+        explicit=singles,
         recursive_roots=groups,
         deepest_common_ancestor=_deepest_common_ancestor
     )

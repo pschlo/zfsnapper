@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from zfsnappr.common.zfs import Snapshot
 from zfsnappr.common.path import Path
-from zfsnappr.common.sort import dataset_sortkey
+from zfsnappr.common.sort import sortkey_dataset
 from zfsnappr.common.utils import group_by, sort_dict
 
 
@@ -19,7 +19,7 @@ class groupers:
     DATASET = Grouper[Path](
         name="dataset",
         groupkey=lambda s: s.dataset,
-        sortkey=dataset_sortkey
+        sortkey=sortkey_dataset
     )
   # TAG = Grouper[int](
   #   name="tag",

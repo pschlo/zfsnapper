@@ -3,7 +3,7 @@ from collections.abc import Collection
 
 from zfsnappr.common.filter import SnapFilter, snapfilters
 from zfsnappr.common.args import CommonArgs
-from zfsnappr.common.sort import sort_snaps_by_time
+from zfsnappr.common.sort import sortkey_snap_by_time
 from zfsnappr.common.zfs import ZfsCli
 from zfsnappr.common.utils import combine_dicts
 from zfsnappr.common.resolve_datasets import ResolvedDatasets, resolve_dataset_specs
@@ -52,10 +52,7 @@ def fetch_snaps(
 
     Snapshots are sorted by creation time (ascending order) and optionally filtered.
     """
-    snaps = [
-        *cli.get_all_snapshots(datasets.p.recursive_roots, properties=props, recursive=True),
-        *cli.get_all_snapshots(datasets.p.explicit_paths, properties=props, recursive=False)
-    ]
+    snaps = cli.get_all_snapshots(datasets.p.matched, properties=props)
     snaps = filter.apply(snaps)
-    snaps = sort_snaps_by_time(snaps)
+    snaps = sorted(snaps, key=sortkey_snap_by_time)
     return snaps

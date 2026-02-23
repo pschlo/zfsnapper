@@ -6,7 +6,7 @@ from .resolve_paths import resolve_paths, ResolvedPaths
 from .path import Path
 from .parse_dataset_arg import parse_dataset_arg, ConnSpec, DatasetSpec
 from .utils import group_by, combine_dicts
-from .sort import sort_conns
+from .sort import sortkey_conn
 
 
 @dataclass
@@ -19,8 +19,8 @@ class Policy:
 
 @dataclass
 class ResolvedDatasets:
-    datasets: set[Dataset]
-    explicit_datasets: set[Dataset]
+    matched: set[Dataset]
+    explicit: set[Dataset]
     recursive_roots: set[Dataset]
     path_to_dataset: dict[Path, Dataset]
 
@@ -66,7 +66,7 @@ def resolve_dataset_specs(
         raise ValueError(f"Location '{next(iter(diff))}' is only used for exclusion")
 
     # Sort conns for determinism
-    conns = sort_conns(inc_conns)
+    conns = sorted(inc_conns, key=sortkey_conn)
 
     # Create CLIs
     clis = {c: create_zfs_cli(c) for c in conns}
@@ -95,12 +95,12 @@ def resolve_dataset_specs(
         )
 
         # Ensure there are kept datasets
-        if not resolved_datasets.datasets:
+        if not resolved_datasets.matched:
             raise ValueError(f"Resolving datasets for location '{conn}' yielded no datasets")
 
         # Ensure all explicitly included datasets are kept, to avoid surprises
         _inc_exact = {p for p in policy.include_exact if p}
-        _kept_paths = resolved_datasets.p.paths
+        _kept_paths = resolved_datasets.p.matched
         if diff := _inc_exact - _kept_paths:
             ds = next(iter(diff))
             raise ValueError(f"Dataset '{conn}/{ds}' is no longer included in resolved datasets")
@@ -135,8 +135,8 @@ def resolve_conn_datasets(
 
     # Reconstruct datasets
     resolved_datasets = ResolvedDatasets(
-        datasets={path_to_dataset[p] for p in resolved_paths.paths},
-        explicit_datasets={path_to_dataset[p] for p in resolved_paths.explicit_paths},
+        matched={path_to_dataset[p] for p in resolved_paths.matched},
+        explicit={path_to_dataset[p] for p in resolved_paths.explicit},
         # In ZFS, parents must exist, so this is safe
         recursive_roots={path_to_dataset[p] for p in resolved_paths.recursive_roots},
         path_to_dataset=path_to_dataset,

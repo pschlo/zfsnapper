@@ -259,13 +259,19 @@ class ZfsCli(ABC):
     
         return _datasets
   
-    def create_snapshot(self, fullname: str, recursive: bool = False, properties: dict[str, str] = {}) -> None:
-        cmd = ['zfs', 'snapshot']
+    def create_snapshot(self, datasets: Path | str | Collection[Path | str], shortname: str, recursive: bool = False, properties: dict[str, str] = {}) -> None:
+        if isinstance(datasets, Path | str):
+            datasets = [datasets]
+        datasets = [Path(d) for d in datasets]
+        if not datasets:
+            return
+
+        cmd: list[str] = ['zfs', 'snapshot']
         if recursive:
             cmd += ['-r']
         for property, value in properties.items():
             cmd += ['-o', f'{property}={value}']
-        cmd += [fullname]
+        cmd += [f"{d}@{shortname}" for d in datasets]
         self._run_text_command(cmd)
   
     def rename_snapshot(self, fullname: str, new_shortname: str) -> None:

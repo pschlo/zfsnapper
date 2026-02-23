@@ -1,15 +1,13 @@
 from __future__ import annotations
-from typing import Optional, cast
 import random
 import string
 import logging
-from collections.abc import Collection
 
-from zfsnappr.common.zfs import ZfsProperty, Dataset, ZfsCli
+from zfsnappr.common.zfs import ZfsProperty
 from zfsnappr.common.command_utils import resolve_dataset_args
-from zfsnappr.common.resolve_datasets import ConnSpec
 from .args import Args
-from zfsnappr.common.sort import dataset_sortkey
+from zfsnappr.common.utils import space
+from zfsnappr.common.sort import sortkey_dataset
 
 
 log = logging.getLogger(__name__)
@@ -25,25 +23,22 @@ def generate_random_name() -> str:
 
 def entrypoint(args: Args) -> None:
     resolved = resolve_dataset_args(args)
+
+    _first = True
     for conn, (datasets, cli) in resolved.items():
-        atomic_creates = [
-            *((d, False) for d in datasets.explicit_datasets),
-            *((d, True) for d in datasets.recursive_roots)
-        ]
-        for dataset, recurse in sorted(atomic_creates, key=lambda t: dataset_sortkey(t[0])):
-            create_snapshot(conn=conn, cli=cli, dataset=dataset, filter_tags=args.tag, recurse=recurse)
+        if not _first:
+            log.info("")
+        _first = False
 
+        shortname = generate_random_name()
+        cli.create_snapshot(
+            datasets=datasets.p.matched,
+            shortname=shortname,
+            properties={
+                ZfsProperty.CUSTOM_TAGS: ','.join(args.tag)
+            }
+        )
 
-def create_snapshot(conn: ConnSpec, cli: ZfsCli, dataset: Dataset, filter_tags: Collection[str], recurse: bool):
-    shortname = generate_random_name()
-    fullname = f'{dataset.path}@{shortname}'
-
-    cli.create_snapshot(
-        fullname=fullname,
-        recursive=recurse,
-        properties={
-            ZfsProperty.CUSTOM_TAGS: ','.join(filter_tags)
-        }
-    )
-
-    log.info(f"Created{' recursive ' if recurse else ' '}snapshot of '{conn}/{dataset.path}': {shortname}")
+        log.info(f"[{conn}] Created snapshots of {len(datasets.matched)} datasets: {shortname}")
+        for dataset in sorted(datasets.matched, key=sortkey_dataset):
+            log.info(space(1) + f"{dataset.path}")

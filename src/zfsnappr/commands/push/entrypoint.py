@@ -60,7 +60,7 @@ def push_conn(
     # Create matching of source dataset to dest dataset
     srcpath_to_destpath = {
         src_path: dest_root / src_path.relative_to(src_root)
-        for src_path in sorted(src_datasets.p.paths, key=lambda p: p.depth)
+        for src_path in sorted(src_datasets.p.matched, key=lambda p: p.depth)
     }
 
     # Determine corresponding dest datasets
@@ -71,18 +71,18 @@ def push_conn(
     )
 
     # Determine missing dest datasets
-    missing_dest_paths = set(srcpath_to_destpath.values()) - dest_datasets.p.paths
+    missing_dest_paths = set(srcpath_to_destpath.values()) - dest_datasets.p.matched
 
     # Fetch all snapshots.
     srcpath_to_snaps = group_by(
         fetch_snaps(cli=src_cli, datasets=src_datasets),
         lambda s: s.dataset,
-        ensure_keys=src_datasets.p.paths
+        ensure_keys=src_datasets.p.matched
     )
     destpath_to_snaps = group_by(
         fetch_snaps(cli=dest_cli, datasets=dest_datasets),
         lambda s: s.dataset,
-        ensure_keys=dest_datasets.p.paths
+        ensure_keys=dest_datasets.p.matched
     )
 
     # Replicate dataset-by-dataset
