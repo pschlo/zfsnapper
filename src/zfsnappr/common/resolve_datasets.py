@@ -100,7 +100,7 @@ def resolve_dataset_specs(
 
         # Ensure all explicitly included datasets are kept, to avoid surprises
         _inc_exact = {p for p in policy.include_exact if p}
-        _kept_paths = {d.path for d in resolved_datasets.datasets}
+        _kept_paths = resolved_datasets.p.paths
         if diff := _inc_exact - _kept_paths:
             ds = next(iter(diff))
             raise ValueError(f"Dataset '{conn}/{ds}' is no longer included in resolved datasets")
@@ -108,7 +108,6 @@ def resolve_dataset_specs(
         datasets[conn] = resolved_datasets
 
     return datasets, clis
-
 
 
 def resolve_conn_datasets(
