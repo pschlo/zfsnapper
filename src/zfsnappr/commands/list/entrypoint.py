@@ -35,10 +35,10 @@ def entrypoint(args: Args) -> None:
         _first = False
 
         log.info(f"Location: {conn}")
-        list_conn(cli=cli, datasets=datasets, filter=filter)
+        list_conn(cli=cli, datasets=datasets, filter=filter, extend_holds=args.holds)
 
 
-def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter):
+def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, extend_holds: bool):
     snaps = fetch_snaps(cli, datasets, filter=filter)
     if not snaps:
         log.info(f"No matching snapshots")
@@ -52,8 +52,12 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter):
         Field('SHORT NAME', lambda s: s.shortname),
         Field('TAGS',       lambda s: ','.join(sorted(s.tags)) if s.tags is not None else 'UNSET'),
         Field('TIMESTAMP',  lambda s: str(s.timestamp)),
-        Field('HOLDS',      lambda s: ','.join(holdtags[s.longname]))
     ]
+    if extend_holds:
+        fields += [Field('HOLDS', lambda s: ','.join(holdtags[s.longname]))]
+    else:
+        fields += [Field('HOLDS', lambda s: '+' if holdtags[s.longname] else '')]
+
     widths: list[int] = [max(len(f.name), *(len(f.get(s)) for s in snaps), 0) for f in fields]
     total_width = (len(COLUMN_SEPARATOR) * ((len(fields) or 1) - 1)) + sum(widths)
 
