@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import datetime
 from subprocess import Popen, PIPE, CalledProcessError
 from typing import Optional, IO, Literal
+from enum import StrEnum
 from collections.abc import Collection
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
@@ -15,7 +16,7 @@ from .path import Path
 log = logging.getLogger(__name__)
 
 
-class ZfsProperty:
+class ZfsProperty(StrEnum):
     NAME = 'name'
     CREATION = 'creation'
     GUID = 'guid'
@@ -28,6 +29,14 @@ class ZfsProperty:
     CUSTOM_TAGS = 'zfsnappr:tags'  # the user property used to store and read tags
 
 
+class PeerProperty(StrEnum):
+    """Used for custom user properties of the format `zfsnappr:peer:<slot>:<property>`."""
+    GUID = 'guid'
+    HOST = 'host'
+    PATH = 'path'
+    LAST_USED = 'last_used'
+
+
 class ZfsDatasetType(StrEnum):
     FILESYSTEM = 'filesystem'
     VOLUME = 'volume'
@@ -36,7 +45,19 @@ class ZfsDatasetType(StrEnum):
 
 
 # properties that will always be fetched
-REQUIRED_PROPS = [ZfsProperty.NAME, ZfsProperty.CREATION, ZfsProperty.GUID, ZfsProperty.CUSTOM_TAGS, ZfsProperty.USERREFS, ZfsProperty.TYPE]
+REQUIRED_SNAP_PROPS = [
+    ZfsProperty.NAME,
+    ZfsProperty.CREATION,
+    ZfsProperty.GUID,
+    ZfsProperty.CUSTOM_TAGS,
+    ZfsProperty.USERREFS,
+]
+
+REQUIRED_DATASET_PROPS = [
+    ZfsProperty.NAME,
+    ZfsProperty.GUID,
+    ZfsProperty.TYPE,
+]
 
 
 @dataclass(eq=False)
@@ -113,11 +134,31 @@ class Pool:
     guid: int
 
 
+@dataclass
+class Peer:
+    guid: int
+    host: str
+    path: Path
+    last_used: datetime
+
+    @classmethod
+    def from_props(cls, properties: dict[str, str]):
+        P = PeerProperty
+        ps = properties
+        return Peer(
+            guid=int(ps[P.GUID]),
+            host=ps[P.HOST],
+            path=Path(ps[P.PATH]),
+            last_used=datetime.fromtimestamp(int(ps[P.LAST_USED]))
+        )
+
+
 @dataclass(eq=False)
 class Dataset:
     path: Path
     guid: int
     type: ZfsDatasetType
+    peer_slots: dict[int, Peer | None]
 
     def __repr__(self) -> str:
         return f"Dataset({self.path})"
@@ -131,10 +172,37 @@ class Dataset:
         guid = int(ps[P.GUID])
         type = ZfsDatasetType(ps[P.TYPE])
 
+        # Parse peer slots
+        slot_to_kwargs: dict[int, dict[str, str]] = {}
+        for p, v in ps.items():
+            parts = p.split(':')
+            if parts[:2] != ['zfsnappr', 'peer']:
+                continue
+            slot = int(parts[2])
+            tag = parts[3]
+
+            kwargs = slot_to_kwargs.setdefault(slot, {})
+            kwargs[tag] = v
+
+        # Convert to peers
+        peers: dict[int, Peer | None] = {}
+        for slot, kwargs in slot_to_kwargs.items():
+            empty = {k for k, v in kwargs.items() if v == '-'}
+            if empty:
+                if len(empty) < len(kwargs):
+                    # Some keys are empty, some aren't; this is illegal
+                    raise RuntimeError(f"Invalid peer properties at slot {slot} of dataset {path}")
+                # All are empty
+                peers[slot] = None
+            else:
+                # All are nonempty
+                peers[slot] = Peer.from_props(kwargs)
+
         return Dataset(
             path=path,
             guid=guid,
-            type=type
+            type=type,
+            peer_slots=peers
         )
 
 
@@ -228,7 +296,7 @@ class ZfsCli(ABC):
     def get_datasets(self, paths: Collection[Path | str], properties: Collection[str] = []) -> list[Dataset]:
         if not paths:
             return []
-        properties = list(dict.fromkeys(REQUIRED_PROPS + list(properties)))  # eliminate duplicates
+        properties = list(dict.fromkeys(REQUIRED_DATASET_PROPS + list(properties)))  # eliminate duplicates
 
         cmd: list[str] = ['zfs', 'get', '-Hp', '-o', 'value', ','.join(properties), *(str(p) for p in paths)]
         lines = self._run_text_command(cmd).splitlines()
@@ -255,7 +323,10 @@ class ZfsCli(ABC):
         if paths is not None and not paths:
             # Empty paths container
             return []
-        properties = list(dict.fromkeys(REQUIRED_PROPS + list(properties)))  # eliminate duplicates
+        properties = list(dict.fromkeys(REQUIRED_DATASET_PROPS + list(properties)))  # eliminate duplicates
+
+        # Add peer properties
+        properties += [f'zfsnappr:peer:{i}:{p}' for i in range(30) for p in PeerProperty]
 
         cmd = ['zfs', 'list', '-Hp', '-o', ','.join(properties)]
         if recursive:
@@ -294,7 +365,7 @@ class ZfsCli(ABC):
     def get_snapshots(self, fullnames: Collection[str], properties: Collection[str] = []) -> list[Snapshot]:
         if not fullnames:
             return []
-        properties = list(dict.fromkeys(REQUIRED_PROPS + list(properties)))  # eliminate duplicates
+        properties = list(dict.fromkeys(REQUIRED_SNAP_PROPS + list(properties)))  # eliminate duplicates
         
         cmd = ['zfs', 'get', '-Hp', '-o', 'value', ','.join(properties), *fullnames]
         lines = self._run_text_command(cmd).splitlines()
@@ -311,7 +382,7 @@ class ZfsCli(ABC):
         recursive: bool = False,
         properties: Collection[str] = [],
     ) -> list[Snapshot]:
-        properties = list(dict.fromkeys(REQUIRED_PROPS + list(properties)))  # eliminate duplicates
+        properties = list(dict.fromkeys(REQUIRED_SNAP_PROPS + list(properties)))  # eliminate duplicates
         if datasets is not None and not datasets:
             # empty dataset container
             return []
