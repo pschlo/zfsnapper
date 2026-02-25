@@ -94,7 +94,14 @@ def update_peer(
         return
 
     # Find first free slot
-    slot = next((slot for slot, peer in dataset.peer_slots.items() if peer is None), None)
+    slot = next((slot for slot, p in dataset.peer_slots.items() if p is None), None)
     if slot is None:
         raise RuntimeError(f"Cannot set peer on dataset {dataset.path}: No free slots")
     set_peer(cli=cli, dataset=dataset, peer=peer, slot=slot)
+
+
+def get_peer(
+    dataset: Dataset,
+    guid: int
+) -> Peer | None:
+    return next((p for slot, p in dataset.peer_slots.items() if p is not None and p.guid == guid), None)

@@ -7,6 +7,7 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from itertools import batched
+import shlex
 import logging
 
 from .path import Path
@@ -291,6 +292,9 @@ class ZfsCli(ABC):
             return []
         properties = list(dict.fromkeys(REQUIRED_DATASET_PROPS + list(properties)))  # eliminate duplicates
 
+        # Add peer slots
+        properties += [f'zfsnappr:peer:{i}' for i in range(30)]
+
         cmd: list[str] = ['zfs', 'get', '-Hp', '-o', 'value', ','.join(properties), *(str(p) for p in paths)]
         lines = self._run_text_command(cmd).splitlines()
 
@@ -400,6 +404,7 @@ class ZfsCli(ABC):
         if isinstance(objects, Path | str):
             objects = [objects]
         objects = [str(obj) for obj in objects]
+        assert objects
 
         cmd = ['zfs', 'set']
         cmd += [f'{p}={v}' for p, v in props_values.items()]
@@ -453,5 +458,11 @@ class RemoteZfsCli(ZfsCli):
         self.ssh_command = cmd
 
     def _start_command(self, cmd: list[str], stdin=None, stdout=None, stderr=None, text=False) -> Popen:
-        cmd = self.ssh_command + cmd
-        return Popen(cmd, stdin=stdin, stdout=stdout, stderr=stderr, text=text)
+        remote_cmd = ' '.join(shlex.quote(arg) for arg in cmd)
+        return Popen(
+            self.ssh_command + [remote_cmd],
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
+            text=text
+        )

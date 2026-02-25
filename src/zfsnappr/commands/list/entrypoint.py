@@ -6,7 +6,7 @@ import logging
 
 from .args import Args
 from zfsnappr.common.zfs import Snapshot, ZfsCli
-from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_peer
 from zfsnappr.common.filter import SnapFilter
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
 
@@ -56,6 +56,13 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, exten
         fields += [Field('HOLDS', lambda s: ','.join(holdtags[s.longname]))]
     else:
         fields += [Field('HOLDS', lambda s: '+' if holdtags[s.longname] else '')]
+    fields += [Field(
+        'PEERS',
+        lambda s: str(
+            get_peer(datasets.path_to_dataset[s.dataset], int(next(iter(holdtags[s.longname])).removeprefix('zfsnappr-sendbase-')))
+        )# lambda s: ", ".join(f"{p.host}/{p.path}" for p in datasets.path_to_dataset[s.dataset].peer_slots.values() if p)
+        if holdtags[s.longname] else ''
+    )]
 
     widths: list[int] = [max(len(f.name), *(len(f.get(s)) for s in snaps), 0) for f in fields]
     total_width = (len(COLUMN_SEPARATOR) * ((len(fields) or 1) - 1)) + sum(widths)

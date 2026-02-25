@@ -155,7 +155,7 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
     assert source.content is not None
 
     # Ensure sorting
-    source.content.snaps = sorted(source.content.snaps, key=sortkey_snap_by_time, reverse=True)
+    source.content.snaps.sort(key=sortkey_snap_by_time, reverse=True)
 
     if dest.content is None:
         # Dest dataset does not exist; cannot fetch snapshots.
@@ -188,7 +188,7 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
 
     else:
         # Ensure sorting
-        dest.content.snaps = sorted(source.content.snaps, key=sortkey_snap_by_time, reverse=True)
+        dest.content.snaps.sort(key=sortkey_snap_by_time, reverse=True)
 
         # Update peer information
         update_peer(cli=source.cli, dataset=source.content.dataset, peer=to_peer(dest))
@@ -260,6 +260,12 @@ def transfer_incremental(source: DatasetSide, dest: DatasetSide, log_indent: int
     # Determine sequence of source snapshots to transfer.
     # Default: transfer all source snapshots from common base to latest.
     transfer_sequence = list(reversed(source.content.snaps[:base_index+1]))
+
+    # must at least contain a base snapshot
+    assert transfer_sequence
+    if len(transfer_sequence) <= 1:
+        log.info(_s() + f"Already up to date")
+        return
 
     # Check for timestamp conflicts
     check_timestamp_conflicts(source, dest, transfer_sequence=transfer_sequence)
