@@ -7,7 +7,6 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from itertools import batched
-from enum import StrEnum
 import logging
 
 from .path import Path
@@ -16,7 +15,7 @@ from .path import Path
 log = logging.getLogger(__name__)
 
 
-class ZfsProperty(StrEnum):
+class ZfsProperty:
     NAME = 'name'
     CREATION = 'creation'
     GUID = 'guid'
@@ -29,7 +28,7 @@ class ZfsProperty(StrEnum):
     CUSTOM_TAGS = 'zfsnappr:tags'  # the user property used to store and read tags
 
 
-class PeerProperty(StrEnum):
+class PeerField(StrEnum):
     """Used for custom user properties of the format `zfsnappr:peer:<slot>:<property>`."""
     GUID = 'guid'
     HOST = 'host'
@@ -142,14 +141,14 @@ class Peer:
     last_used: datetime
 
     @classmethod
-    def from_props(cls, properties: dict[str, str]):
-        P = PeerProperty
-        ps = properties
+    def from_fields(cls, fields: dict[str, str]):
+        P = PeerField
+        fs = fields
         return Peer(
-            guid=int(ps[P.GUID]),
-            host=ps[P.HOST],
-            path=Path(ps[P.PATH]),
-            last_used=datetime.fromtimestamp(int(ps[P.LAST_USED]))
+            guid=int(fs[P.GUID]),
+            host=fs[P.HOST],
+            path=Path(fs[P.PATH]),
+            last_used=datetime.fromtimestamp(int(fs[P.LAST_USED]))
         )
 
 
@@ -173,36 +172,30 @@ class Dataset:
         type = ZfsDatasetType(ps[P.TYPE])
 
         # Parse peer slots
-        slot_to_kwargs: dict[int, dict[str, str]] = {}
-        for p, v in ps.items():
-            parts = p.split(':')
+        peer_slots: dict[int, Peer | None] = {}
+        for prop, value in ps.items():
+            parts = prop.split(':')
             if parts[:2] != ['zfsnappr', 'peer']:
                 continue
+
             slot = int(parts[2])
-            tag = parts[3]
+            if value == '-':
+                # Slot is empty
+                peer_slots[slot] = None
+                continue
 
-            kwargs = slot_to_kwargs.setdefault(slot, {})
-            kwargs[tag] = v
-
-        # Convert to peers
-        peers: dict[int, Peer | None] = {}
-        for slot, kwargs in slot_to_kwargs.items():
-            empty = {k for k, v in kwargs.items() if v == '-'}
-            if empty:
-                if len(empty) < len(kwargs):
-                    # Some keys are empty, some aren't; this is illegal
-                    raise RuntimeError(f"Invalid peer properties at slot {slot} of dataset {path}")
-                # All are empty
-                peers[slot] = None
-            else:
-                # All are nonempty
-                peers[slot] = Peer.from_props(kwargs)
+            # Slot is nonempty
+            fields = {}
+            for field in value.split(';'):
+                f, v = field.split('=', maxsplit=1)
+                fields[f] = v
+            peer_slots[slot] = Peer.from_fields(fields)
 
         return Dataset(
             path=path,
             guid=guid,
             type=type,
-            peer_slots=peers
+            peer_slots=peer_slots
         )
 
 
@@ -325,8 +318,8 @@ class ZfsCli(ABC):
             return []
         properties = list(dict.fromkeys(REQUIRED_DATASET_PROPS + list(properties)))  # eliminate duplicates
 
-        # Add peer properties
-        properties += [f'zfsnappr:peer:{i}:{p}' for i in range(30) for p in PeerProperty]
+        # Add peer slots
+        properties += [f'zfsnappr:peer:{i}' for i in range(30)]
 
         cmd = ['zfs', 'list', '-Hp', '-o', ','.join(properties)]
         if recursive:
@@ -403,9 +396,31 @@ class ZfsCli(ABC):
         return snapshots
 
 
-    def set_tags(self, snap_fullname: str, tags: Collection[str]):
-        cmd = ['zfs', 'set', f"{ZfsProperty.CUSTOM_TAGS}={','.join(tags)}", snap_fullname]
+    def set_properties(self, objects: Path | str | Collection[Path | str], props_values: dict[str, str]):
+        if isinstance(objects, Path | str):
+            objects = [objects]
+        objects = [str(obj) for obj in objects]
+
+        cmd = ['zfs', 'set']
+        cmd += [f'{p}={v}' for p, v in props_values.items()]
+        cmd += objects
         self._run_text_command(cmd)
+
+    def set_property(self, objects: Path | str | Collection[Path | str], property: str, value: str):
+        self.set_properties(objects, {property: value})
+
+    def unset_property(self, objects: Path | str | Collection[Path | str], property: str):
+        if isinstance(objects, Path | str):
+            objects = [objects]
+        objects = [str(obj) for obj in objects]
+
+        cmd = ['zfs', 'inherit', property]
+        cmd += objects
+        self._run_text_command(cmd)
+
+    def set_snapshot_tags(self, snap_fullname: str, tags: Collection[str]):
+        props = {str(ZfsProperty.CUSTOM_TAGS): ','.join(tags)}
+        self.set_properties(snap_fullname, props)
 
     def destroy_snapshots(self, dataset: Path | str, snapshots_shortnames: Collection[str]) -> None:
         if not snapshots_shortnames:

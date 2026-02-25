@@ -110,7 +110,7 @@ def tag_snap(snap: Snapshot, operations: list[Operation], cli: ZfsCli) -> bool:
 
     # Apply once per snapshot
     if tags != original_tags and tags is not None:
-        cli.set_tags(snap.longname, tags)
+        cli.set_snapshot_tags(snap.longname, tags)
         log.info(space(2) + f"Updated tags for snapshot: {snap.shortname}")
         return True
     return False

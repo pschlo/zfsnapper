@@ -137,7 +137,7 @@ def replicate_snaps_incremental(
         _dest_tags = base_snap[1].tags or set()
         if _missing := _src_tags - _dest_tags:
             log.info(_s() + f"Adding missing tags to base snapshot '{base_snap[1].shortname}' on destination")
-            dest_cli.set_tags(base_snap[1].longname, _dest_tags | _missing)
+            dest_cli.set_snapshot_tags(base_snap[1].longname, _dest_tags | _missing)
 
     # Determine sequence of source snapshots to transfer.
     # Default: transfer all source snapshots from common base to latest.

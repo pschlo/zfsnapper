@@ -1,12 +1,14 @@
 from __future__ import annotations
 import logging
+from typing import cast
+from datetime import datetime
 
 from zfsnappr.common.replication import ReplicationError, replicate_snaps_initial, replicate_snaps_incremental
 from zfsnappr.common.resolve_datasets import ResolvedDatasets, create_zfs_cli, resolve_conn_datasets
-from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps
+from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps, update_peer
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg, DatasetSpec, ConnSpec
 from zfsnappr.common.path import Path
-from zfsnappr.common.zfs import ZfsCli
+from zfsnappr.common.zfs import ZfsCli, Dataset, Peer
 from zfsnappr.common.utils import group_by, combine_dicts, space
 from .args import Args
 
@@ -88,6 +90,15 @@ def push_conn(
     # Replicate dataset-by-dataset
     is_error = False
     for srcpath, destpath in srcpath_to_destpath.items():
+
+        # Update peer properties on source dataset
+        src_dataset: Dataset = cast(Dataset, None)
+        peer = Peer(
+            last_used=datetime.now(),
+            ...
+        )
+        update_peer(cli=src_cli, dataset=src_dataset, peer=peer)
+
         try:
             relpath = srcpath.relative_to(src_root)
             log.info(_s(1) + f"Checking dataset: ~{f'/{relpath}' if relpath else ''}")

@@ -92,7 +92,7 @@ def _send_receive(
         
         # set tags on dest snapshot
         if snapshot.tags is not None:
-            dest_cli.set_tags(snapshot.with_dataset(dest_dataset).longname, snapshot.tags)
+            dest_cli.set_snapshot_tags(snapshot.with_dataset(dest_dataset).longname, snapshot.tags)
 
         # hold snaps
         src_tag = holdtags[0] if isinstance(holdtags[0], str) else holdtags[0](dest_cli.get_dataset(dest_dataset))
