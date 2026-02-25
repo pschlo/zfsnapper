@@ -32,7 +32,6 @@ def _send_receive(
     dest_dataset: Path,
     snapshot: Snapshot,
     base: Snapshot | None,
-    holdtags: tuple[Holdtag, Holdtag],
     properties: dict[str, str] = {},
     log_indent: int = 0
 ) -> None:
@@ -93,17 +92,6 @@ def _send_receive(
         # set tags on dest snapshot
         if snapshot.tags is not None:
             dest_cli.set_snapshot_tags(snapshot.with_dataset(dest_dataset).longname, snapshot.tags)
-
-        # hold snaps
-        src_tag = holdtags[0] if isinstance(holdtags[0], str) else holdtags[0](dest_cli.get_dataset(dest_dataset))
-        dest_tag = holdtags[1] if isinstance(holdtags[1], str) else holdtags[1](src_cli.get_dataset(snapshot.dataset))
-        src_cli.hold([snapshot.longname], src_tag)
-        dest_cli.hold([snapshot.with_dataset(dest_dataset).longname], dest_tag)
-
-        # Release base snaps (must have hold)
-        if base is not None:
-            src_cli.release_hold([base.longname], src_tag)
-            dest_cli.release_hold([base.with_dataset(dest_dataset).longname], dest_tag)
     
     except BaseException as e:
         log.info("Cleaning up")

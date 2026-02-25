@@ -2,12 +2,15 @@ from __future__ import annotations
 from collections.abc import Collection
 import logging
 from itertools import pairwise
+from datetime import datetime
 
-from zfsnappr.common.zfs import Snapshot, ZfsCli, Dataset
+from zfsnappr.common.zfs import Snapshot, ZfsCli, Dataset, Peer
 from zfsnappr.common.replication.exception import ReplicationError
 from zfsnappr.common.path import Path
+from zfsnappr.common.parse_dataset_arg import ConnSpec
 from zfsnappr.common.sort import sortkey_snap_by_time
 from zfsnappr.common.utils import space
+from zfsnappr.common.command_utils import update_peer
 
 from .send_receive_snap import send_receive_incremental, send_receive_initial
 
@@ -25,7 +28,7 @@ def replicate_snaps_initial(
     source_cli: ZfsCli,
     source_dataset: Dataset,
     source_snaps: Collection[Snapshot],
-    dest_dataset: Path,
+    dest_path: Path,
     dest_cli: ZfsCli,
     dest_root: Path,
     log_indent: int = 0
@@ -36,18 +39,20 @@ def replicate_snaps_initial(
     # sorting is required
     source_snaps = sorted(source_snaps, key=sortkey_snap_by_time, reverse=True)
 
-    _rel_dest = dest_dataset.relative_to(dest_root)
     log.info(_s() + f"Creating destination dataset by transferring oldest snapshot")
     initial_src_snap = source_snaps[-1]
     send_receive_initial(
         clis=(source_cli, dest_cli),
-        dest_dataset=dest_dataset,
+        dest_dataset=dest_path,
         source_dataset_type=source_dataset.type,
         snapshot=initial_src_snap,
         holdtags=(holdtag_src, holdtag_dest),
         log_indent=log_indent + 1
     )
-    initial_dest_snap = initial_src_snap.with_dataset(dest_dataset)
+    initial_dest_snap = initial_src_snap.with_dataset(dest_path)
+
+    # Fetch the newly created dataset so that we know its GUID and can use it to create peer annotation
+    dest_dataset = dest_cli.get_dataset(dest_path)
 
     # Since we just created the destination, the holdtag could not have existed before, but definitely does now.
     # The number of holds must thus have increased by one.
@@ -72,6 +77,10 @@ def replicate_snaps_incremental(
     dest_cli: ZfsCli,
     dest_snaps: Collection[Snapshot],
     rollback: bool,
+    source_dataset: Dataset,
+    dest_dataset: Dataset,
+    source_conn: ConnSpec,
+    dest_conn: ConnSpec,
     log_indent: int = 0
 ):
     """
@@ -91,16 +100,35 @@ def replicate_snaps_incremental(
         log.info(_s() + f'No source snapshots given, nothing to do')
         return
 
-    source_dataset = next(iter(source_snaps)).dataset
-    dest_dataset = next(iter(dest_snaps)).dataset
+    # source_dataset = next(iter(source_snaps)).dataset
+    # dest_dataset = next(iter(dest_snaps)).dataset
 
     # Snaps must all be of the same dataset
-    assert all(s.dataset == source_dataset for s in source_snaps)
+    assert all(s.dataset == source_dataset.path for s in source_snaps)
     assert all(s.dataset == dest_dataset for s in dest_snaps)
 
     # sorting is required
     source_snaps = sorted(source_snaps, key=sortkey_snap_by_time, reverse=True)
     dest_snaps = sorted(dest_snaps, key=sortkey_snap_by_time, reverse=True)
+
+    # Update peer properties on source dataset
+    source_peer = Peer(
+        last_used=datetime.now(),
+        guid=dest_dataset.guid,
+        path=dest_dataset.path,
+        host=str(dest_conn)
+    )
+    update_peer(cli=source_cli, dataset=source_dataset, peer=source_peer)
+
+
+    # Update peer properties on dest dataset
+    dest_peer = Peer(
+        last_used=datetime.now(),
+        guid=source_dataset.guid,
+        path=source_dataset.path,
+        host=str(source_conn)
+    )
+    update_peer(cli=dest_cli, dataset=dest_dataset, peer=dest_peer)
 
 
     ##### PHASE 1: Critical preparation, check for abort conditions
