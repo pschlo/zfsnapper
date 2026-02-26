@@ -43,10 +43,10 @@ def entrypoint(args: Args) -> None:
         _first = False
 
         log.info(f"[{conn}] Syncing peers")
-        sync_peer_conn(cli=cli, datasets=datasets, peer_conn_guids=peer_conn_guids)
+        sync_peer_conn(conn=conn, cli=cli, datasets=datasets, peer_conn_guids=peer_conn_guids)
 
 
-def sync_peer_conn(cli: ZfsCli, datasets: ResolvedDatasets, peer_conn_guids: dict[ConnSpec, set[int]]):
+def sync_peer_conn(conn: ConnSpec, cli: ZfsCli, datasets: ResolvedDatasets, peer_conn_guids: dict[ConnSpec, set[int]]):
     """
     - Check existing GUIDs on dest
     - Remove own peers
@@ -57,16 +57,15 @@ def sync_peer_conn(cli: ZfsCli, datasets: ResolvedDatasets, peer_conn_guids: dic
         expected_peers: dict[int, set[tuple[Dataset, Peer]]] = {}
         for ds in datasets.matched:
             for p in ds.peer_slots.values():
-                if p and p.host == str(peer_conn):
+                if p and p.host == peer_conn:
                     expected_peers.setdefault(p.guid, set()).add((ds, p))
 
         obsolete_peers = {k: v for k, v in expected_peers.items() if k not in peer_guids}
-        print(f"Found {len(obsolete_peers)} obsolete peers")
+        print(f"Found {len(obsolete_peers)} obsolete peers from {peer_conn}")
         for guid, _datasets in obsolete_peers.items():
             for ds, peer in _datasets:
                 # remove_peer(cli=cli, dataset=d, peer_guid=guid)
                 print(f"Removing peer {peer} on dataset {ds}")
-                ...
 
 
 def prune_unused_peers():

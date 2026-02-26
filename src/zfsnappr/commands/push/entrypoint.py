@@ -305,7 +305,7 @@ def to_peer(side: DatasetSide):
         last_used=datetime.now(),
         guid=side.content.dataset.guid,
         path=side.path,
-        host=str(side.conn)
+        host=side.conn
     )
 
 

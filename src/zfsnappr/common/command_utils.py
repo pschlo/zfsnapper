@@ -89,7 +89,7 @@ def _set_peer_slot(
     field_values: dict[PeerField, str] = {
         PeerField.GUID: str(peer.guid),
         PeerField.PATH: str(peer.path),
-        PeerField.HOST: peer.host,
+        PeerField.HOST: str(peer.host),
         PeerField.LAST_USED: str(int(peer.last_used.timestamp()))
     }
     value = ';'.join(f'{f}={v}' for f, v in field_values.items())

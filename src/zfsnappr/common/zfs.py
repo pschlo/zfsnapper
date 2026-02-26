@@ -1,7 +1,7 @@
 from __future__ import annotations
 from datetime import datetime
 from subprocess import Popen, PIPE, CalledProcessError
-from typing import Optional, IO, Literal
+from typing import Optional, IO, Literal, TYPE_CHECKING
 from enum import StrEnum
 from collections.abc import Collection
 from dataclasses import dataclass
@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from itertools import batched
 import shlex
 import logging
+from zfsnappr.common.parse_dataset_arg import ConnSpec, parse_conn
 
 from .path import Path
 
@@ -167,7 +168,7 @@ class Pool:
 @dataclass(eq=False)
 class Peer:
     guid: int
-    host: str
+    host: ConnSpec
     path: Path
     last_used: datetime
 
@@ -177,7 +178,7 @@ class Peer:
         fs = fields
         return Peer(
             guid=int(fs[P.GUID]),
-            host=fs[P.HOST],
+            host=parse_conn(fs[P.HOST]),
             path=Path(fs[P.PATH]),
             last_used=datetime.fromtimestamp(int(fs[P.LAST_USED]))
         )
@@ -213,12 +214,9 @@ class Dataset:
             if parts[:2] != ['zfsnappr', 'peer']:
                 continue
 
-            # Ignore inherited peer slots
-            if prop.source != PropertySource.LOCAL:
-                continue
-
             slot = int(parts[2])
-            if prop == '-':
+            # Ignore inherited peer slots
+            if prop == '-' or prop.source != PropertySource.LOCAL:
                 # Slot is empty
                 peer_slots[slot] = None
                 continue
