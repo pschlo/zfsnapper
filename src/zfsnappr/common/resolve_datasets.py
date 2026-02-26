@@ -119,7 +119,7 @@ def resolve_conn_datasets(
     strict: bool = False
 ) -> ResolvedDatasets:
     """Resolve the datasets of a single connection."""
-    all_datasets: list[Dataset] = cli.get_all_datasets()
+    all_datasets: list[Dataset] = cli.get_datasets()
     path_to_dataset: dict[Path, Dataset] = {d.path: d for d in all_datasets}
 
     # Resolve dataset paths

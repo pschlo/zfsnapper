@@ -16,6 +16,36 @@ from .path import Path
 log = logging.getLogger(__name__)
 
 
+class PropertySource(StrEnum):
+    NONE = "none"
+    INHERITED = "inherited"
+    LOCAL = "local"
+
+
+@dataclass(frozen=True)
+class Property:
+    propname: str
+    value: str
+    source: PropertySource
+
+    @classmethod
+    def from_raw(cls, property: str, value: str, source: str):
+        return Property(
+            propname=property,
+            value=value,
+            source=parse_property_source(source)
+        )
+
+def parse_property_source(source: str) -> PropertySource:
+    if source == "-":
+        return PropertySource.NONE
+    if source == "local":
+        return PropertySource.LOCAL
+    if source.startswith("inherited"):
+        return PropertySource.INHERITED
+    raise ValueError(f"Invalid property source")
+
+
 class ZfsProperty:
     NAME = 'name'
     CREATION = 'creation'
@@ -162,32 +192,40 @@ class Dataset:
 
     def __repr__(self) -> str:
         return f"Dataset({self.path})"
+    
+    @property
+    def poolname(self) -> str:
+        return self.path[0]
 
     @classmethod
-    def from_props(cls, properties: dict[str, str]):
+    def from_props(cls, properties: Collection[Property]):
         P = ZfsProperty
-        ps = properties
+        ps = {p.propname: p for p in properties}
 
-        path = Path(ps[P.NAME])
-        guid = int(ps[P.GUID])
-        type = ZfsDatasetType(ps[P.TYPE])
+        path = Path(ps[P.NAME].value)
+        guid = int(ps[P.GUID].value)
+        type = ZfsDatasetType(ps[P.TYPE].value)
 
         # Parse peer slots
         peer_slots: dict[int, Peer | None] = {}
-        for prop, value in ps.items():
-            parts = prop.split(':')
+        for propkey, prop in ps.items():
+            parts = propkey.split(':')
             if parts[:2] != ['zfsnappr', 'peer']:
                 continue
 
+            # Ignore inherited peer slots
+            if prop.source != PropertySource.LOCAL:
+                continue
+
             slot = int(parts[2])
-            if value == '-':
+            if prop == '-':
                 # Slot is empty
                 peer_slots[slot] = None
                 continue
 
             # Slot is nonempty
             fields = {}
-            for field in value.split(';'):
+            for field in prop.value.split(';'):
                 f, v = field.split('=', maxsplit=1)
                 fields[f] = v
             peer_slots[slot] = Peer.from_fields(fields)
@@ -283,40 +321,15 @@ class ZfsCli(ABC):
         self._run_text_command(['zfs', 'release', tag, *snapshots_fullnames])
 
     def get_pool_from_dataset(self, dataset: Path | str) -> Pool:
-        name = str(dataset).split('/')[0]
+        name = Path(dataset)[0]
         guid = self._run_text_command(['zpool', 'get', '-Hp', '-o', 'value', 'guid', name])
         return Pool(name=name, guid=int(guid))
   
-    def get_datasets(self, paths: Collection[Path | str], properties: Collection[str] = []) -> list[Dataset]:
-        if not paths:
-            return []
-        properties = list(dict.fromkeys(REQUIRED_DATASET_PROPS + list(properties)))  # eliminate duplicates
-
-        # Add peer slots
-        properties += [f'zfsnappr:peer:{i}' for i in range(30)]
-
-        cmd: list[str] = ['zfs', 'get', '-Hp', '-o', 'value', ','.join(properties), *(str(p) for p in paths)]
-        lines = self._run_text_command(cmd).splitlines()
-
-        datasets: list[Dataset] = []
-        for i in range(len(paths)):
-            props = {p: v for p, v in zip(properties, lines[i*len(properties):(i+1)*len(properties)])}
-            datasets.append(Dataset.from_props(props))
-        return datasets
-
-
-    def get_dataset(self, path: Path | str, properties: Collection[str] = []) -> Dataset:
-        """Shorthand method"""
-        return next(iter(self.get_datasets([path], properties)))
-
-
-    def get_all_datasets(
+    def get_datasets(
         self,
         paths: Collection[Path | str] | None = None,
-        recursive: bool = False,
         properties: Collection[str] = []
     ) -> list[Dataset]:
-        """If `paths` is not `None`, only fetch these datasets."""
         if paths is not None and not paths:
             # Empty paths container
             return []
@@ -325,20 +338,33 @@ class ZfsCli(ABC):
         # Add peer slots
         properties += [f'zfsnappr:peer:{i}' for i in range(30)]
 
-        cmd = ['zfs', 'list', '-Hp', '-o', ','.join(properties)]
-        if recursive:
-            cmd += ['-r']
+        cmd: list[str] = [
+            'zfs', 'get', '-Hp',
+            '-o', 'name,property,value,source',
+            '-t', ','.join([ZfsDatasetType.FILESYSTEM, ZfsDatasetType.VOLUME]),
+            ','.join(properties)
+        ]
         if paths is not None:
-            assert paths
             cmd += [str(p) for p in paths]
         lines = self._run_text_command(cmd).splitlines()
 
-        _datasets: list[Dataset] = []
+        # Group properties by dataset path
+        ds_to_props: dict[str, set[Property]] = {}
         for line in lines:
-            props = {p: v for p, v in zip(properties, line.split('\t'))}
-            _datasets.append(Dataset.from_props(props))
-    
-        return _datasets
+            name, prop, value, source = line.split('\t')
+            ds_to_props.setdefault(name, set()).add(
+                Property.from_raw(prop, value, source)
+            )
+
+        # Create datasets
+        datasets = [Dataset.from_props(props) for props in ds_to_props.values()]
+        return datasets
+
+
+    def get_dataset(self, path: Path | str, properties: Collection[str] = []) -> Dataset:
+        """Shorthand method"""
+        return next(iter(self.get_datasets([path], properties)))
+
   
     def create_snapshot(self, datasets: Path | str | Collection[Path | str], shortname: str, recursive: bool = False, properties: dict[str, str] = {}) -> None:
         if isinstance(datasets, Path | str):
