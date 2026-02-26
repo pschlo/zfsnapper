@@ -8,7 +8,7 @@ from datetime import datetime
 from zfsnappr.common.replication import ReplicationError
 from zfsnappr.common.replication.send_receive_snap import _send_receive
 from zfsnappr.common.resolve_datasets import ResolvedDatasets, create_zfs_cli, resolve_conn_datasets
-from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps, update_peer
+from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps, update_peer, get_holds
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg, DatasetSpec, ConnSpec
 from zfsnappr.common.path import Path
 from zfsnappr.common.sort import sortkey_snap_by_time
@@ -354,33 +354,33 @@ def ensure_holds(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
 
     # Get holds
     holds = (
-        source.cli.get_holdtags([s.longname for s in source.content.snaps], userrefs={s.longname: s.holds for s in source.content.snaps}),
-        dest.cli.get_holdtags([s.longname for s in dest.content.snaps], userrefs={s.longname: s.holds for s in dest.content.snaps})
+        get_holds(source.cli, source.content.snaps),
+        get_holds(dest.cli, dest.content.snaps)
     )
 
     if source.base_snap is None or dest.base_snap is None:
         # Remove all peer holdtags
         release_snaps = (
-            [s.longname for s in source.content.snaps],
-            [s.longname for s in dest.content.snaps]
+            source.content.snaps,
+            dest.content.snaps
         )
-        _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), current_holdtags=holds, datasets=(source.path, dest.path), log_indent=log_indent)
+        _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), current_holdtags=holds, log_indent=log_indent)
         return
 
     # Ensure latest common snap is held
-    if source.holdtag not in holds[0][source.base_snap.longname]:
+    if source.holdtag not in holds[0][source.base_snap]:
         log.info(_s() + f"Creating hold for latest common snapshot '{source.base_snap.shortname}' on source")
         source.cli.hold([source.base_snap.longname], tag=source.holdtag)
-    if dest.holdtag not in holds[1][dest.base_snap.longname]:
+    if dest.holdtag not in holds[1][dest.base_snap]:
         log.info(_s() + f"Creating hold for latest common snapshot '{dest.base_snap.shortname}' on destination")
         dest.cli.hold([dest.base_snap.longname], tag=dest.holdtag)
 
     # Remove all other holdtags
     release_snaps = (
-        [s.longname for s in source.content.snaps if s.guid != source.base_snap.guid],
-        [s.longname for s in dest.content.snaps if s.guid != dest.base_snap.guid]
+        [s for s in source.content.snaps if s.guid != source.base_snap.guid],
+        [s for s in dest.content.snaps if s.guid != dest.base_snap.guid]
     )
-    _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), current_holdtags=holds, datasets=(source.path, dest.path), log_indent=log_indent)
+    _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), current_holdtags=holds, log_indent=log_indent)
 
 
 
@@ -413,10 +413,9 @@ def determine_latest_common(source: DatasetSide, dest: DatasetSide) -> tuple[Sna
 
 def _release_holds(
     clis: tuple[ZfsCli, ZfsCli],
-    snaps_longnames: tuple[list[str], list[str]],
+    snaps: tuple[list[Snapshot], list[Snapshot]],
     release_holdtags: tuple[str, str],
-    current_holdtags: tuple[dict[str, set[str]], dict[str, set[str]]],
-    datasets: tuple[Path, Path],
+    current_holdtags: tuple[dict[Snapshot, set[str]], dict[Snapshot, set[str]]],
     log_indent: int = 0
 ):
     def _s(level: int = 0):
@@ -424,12 +423,12 @@ def _release_holds(
 
     # Filter for snaps that have the holdtags
     release_snaps = (
-        [s for s in snaps_longnames[0] if release_holdtags[0] in current_holdtags[0][s]],
-        [s for s in snaps_longnames[1] if release_holdtags[1] in current_holdtags[1][s]],
+        [s for s in snaps[0] if release_holdtags[0] in current_holdtags[0][s]],
+        [s for s in snaps[1] if release_holdtags[1] in current_holdtags[1][s]],
     )
     if release_snaps[0]:
         log.info(_s() + f"Releasing {len(release_snaps[0])} obsolete holds on source")
     if release_snaps[1]:
         log.info(_s() + f"Releasing {len(release_snaps[1])} obsolete holds on destination")
-    clis[0].release_hold(release_snaps[0], release_holdtags[0])
-    clis[1].release_hold(release_snaps[1], release_holdtags[1])
+    clis[0].release_hold([s.longname for s in release_snaps[0]], release_holdtags[0])
+    clis[1].release_hold([s.longname for s in release_snaps[1]], release_holdtags[1])

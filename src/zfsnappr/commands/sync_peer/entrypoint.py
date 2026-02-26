@@ -31,7 +31,11 @@ def entrypoint(args: Args) -> None:
     resolved_dests = resolve_dataset_args(include_recurse=args.peer)
 
     # Dest must contain ALL datasets, otherwise we risk removing peers on source that actually exist
-    assert all(dataset.p.is_all_matched for conn, (dataset, cli) in resolved_dests.items())
+    if conn := next(
+        iter(conn for conn, (dataset, cli) in resolved_dests.items() if not dataset.p.is_all_matched),
+        None
+    ):
+        raise ValueError(f"Peer location does not include all datasets: {conn}")
 
     peer_conn_guids = {conn: {p.guid for p in datasets.matched} for conn, (datasets, _) in resolved_dests.items()}
 
