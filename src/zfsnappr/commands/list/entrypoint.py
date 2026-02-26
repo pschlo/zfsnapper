@@ -9,7 +9,7 @@ from zfsnappr.common.zfs import Snapshot, ZfsCli, Peer, Dataset
 from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_peer
 from zfsnappr.common.filter import SnapFilter
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
-from zfsnappr.common.replication.utils import parse_send_holdtags, parse_recv_holdtags
+from zfsnappr.common.replication.utils import parse_holdtags, Direction
 
 
 log = logging.getLogger(__name__)
@@ -71,15 +71,14 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, exten
 def get_snap_peers(snapshot: Snapshot, datasets: ResolvedDatasets, holdtags: dict[str, set[str]]) -> set[str]:
     dataset = datasets.path_to_dataset[snapshot.dataset]
     tags = holdtags[snapshot.longname]
+    peers = {(hold.direction, get_peer(dataset, hold.guid)) for hold in parse_holdtags(tags)}
+    return {format_peer(dir, p) for dir, p in peers}
 
-    out = {
-        *(format_sendto_peer(get_peer(dataset, guid)) for guid in parse_send_holdtags(tags)),
-        *(format_recvfrom_peer(get_peer(dataset, guid)) for guid in parse_recv_holdtags(tags))
-    }
-    return out
-
-def format_sendto_peer(peer: Peer | None):
-    return f"Send to {peer.host}/{peer.path} ({peer.last_used})" if peer else "Send to unknown"
-
-def format_recvfrom_peer(peer: Peer | None):
-    return f"Receive from {peer.host}/{peer.path} ({peer.last_used})" if peer else "Receive from unknown"
+def format_peer(direction: Direction, peer: Peer | None):
+    match direction:
+        case Direction.SEND:
+            return f"Send to {peer.host}/{peer.path} ({peer.last_used})" if peer else "Send to unknown"
+        case Direction.RECEIVE:
+            return f"Receive from {peer.host}/{peer.path} ({peer.last_used})" if peer else "Receive from unknown"
+        case _:
+            assert False

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from itertools import pairwise
 from datetime import datetime
 
-from zfsnappr.common.replication import ReplicationError, replicate_snaps_initial, replicate_snaps_incremental
+from zfsnappr.common.replication import ReplicationError
 from zfsnappr.common.replication.send_receive_snap import _send_receive
 from zfsnappr.common.resolve_datasets import ResolvedDatasets, create_zfs_cli, resolve_conn_datasets
 from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps, update_peer

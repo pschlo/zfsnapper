@@ -134,7 +134,7 @@ class Pool:
     guid: int
 
 
-@dataclass
+@dataclass(eq=False)
 class Peer:
     guid: int
     host: str

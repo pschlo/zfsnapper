@@ -1,21 +1,49 @@
 from collections.abc import Collection
+from dataclasses import dataclass
+from enum import StrEnum
 
 from zfsnappr.common.zfs import Dataset
 
-def get_recv_holdtag(dataset: Dataset):
-    return f"zfsnappr-recvbase-{dataset.guid}"
 
-def get_send_holdtag(dataset: Dataset):
-    return f"zfsnappr-sendbase-{dataset.guid}"
+class Direction(StrEnum):
+    SEND = 'send'
+    RECEIVE = 'receive'
 
-def parse_recv_holdtag(tag: str):
-    return int(tag.removeprefix('zfsnappr-recvbase-'))
 
-def parse_send_holdtag(tag: str):
-    return int(tag.removeprefix('zfsnappr-sendbase-'))
+@dataclass(frozen=True)
+class ReplicationHold:
+    direction: Direction
+    guid: int
 
-def parse_send_holdtags(tags: Collection[str]):
-    return {parse_send_holdtag(t) for t in tags if t.startswith('zfsnappr-sendbase-')}
+    @classmethod
+    def from_tag(cls, tag: str):
+        if tag.startswith('zfsnappr-recvbase-'):
+            return ReplicationHold(
+                Direction.RECEIVE,
+                int(tag.removeprefix('zfsnappr-recvbase-'))
+            )
+        if tag.startswith('zfsnappr-sendbase-'):
+            return ReplicationHold(
+                Direction.SEND,
+                int(tag.removeprefix('zfsnappr-sendbase-'))
+            )
+        raise ValueError(f"Invalid holdtag")
+    
+    def to_tag(self) -> str:
+        match self.direction:
+            case Direction.SEND:
+                return f"zfsnappr-sendbase-{self.guid}"
+            case Direction.RECEIVE:
+                return f"zfsnappr-recvbase-{self.guid}"
+            case _:
+                assert False
 
-def parse_recv_holdtags(tags: Collection[str]):
-    return {parse_recv_holdtag(t) for t in tags if t.startswith('zfsnappr-recvbase-')}
+
+def parse_holdtags(tags: Collection[str]) -> set[ReplicationHold]:
+    res: set[ReplicationHold] = set()
+    for tag in tags:
+        try:
+            res.add(ReplicationHold.from_tag(tag))
+        except ValueError:
+            pass
+    return res

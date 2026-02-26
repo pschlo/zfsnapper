@@ -45,6 +45,8 @@ class ResolvedPaths:
     explicit: set[Path]
     recursive_roots: set[Path]
     deepest_common_ancestor: Path
+    is_all_matched: bool
+    """Whether the policy matched all datasets."""
 
 
 def resolve_paths(
@@ -142,7 +144,8 @@ def resolve_paths(
         matched=matched_paths,
         explicit=singles,
         recursive_roots=groups,
-        deepest_common_ancestor=_deepest_common_ancestor
+        deepest_common_ancestor=_deepest_common_ancestor,
+        is_all_matched=not root.contains_unmatched
     )
 
 

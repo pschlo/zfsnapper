@@ -15,6 +15,7 @@ from .commands import (
   list as _list,
   tag as _tag,
   unhold as _unhold,
+  sync_peer as _sync_peer,
   version as _version
 )
 
@@ -48,6 +49,8 @@ def _entrypoint():
             _tag.entrypoint(cast(_tag.Args, args))
         case 'unhold':
             _unhold.entrypoint(cast(_unhold.Args, args))
+        case 'sync-peer':
+            _sync_peer.entrypoint(cast(_sync_peer.Args, args))
         case 'version':
             _version.entrypoint(cast(_version.Args, args))
         case _:

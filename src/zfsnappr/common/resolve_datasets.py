@@ -43,7 +43,7 @@ def resolve_dataset_specs(
     include_recurse: Collection[DatasetSpec] = [],
     exclude_exact: Collection[DatasetSpec] = [],
     exclude_recurse: Collection[DatasetSpec] = [],
-    strict: bool = False
+    strict: bool = False,
 ) -> tuple[
     dict[ConnSpec, ResolvedDatasets],
     dict[ConnSpec, ZfsCli]

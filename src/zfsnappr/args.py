@@ -10,6 +10,7 @@ from .commands import (
   list as _list,
   tag as _tag,
   unhold as _unhold,
+  sync_peer as _sync_peer,
   version as _version
 )
 
@@ -50,6 +51,9 @@ def get_args() -> Args:
     )
     _unhold.args.setup(
         subparsers.add_parser('unhold', parents=[common])
+    )
+    _sync_peer.args.setup(
+        subparsers.add_parser('sync-peer', parents=[common])
     )
     _version.args.setup(
         subparsers.add_parser('version')
