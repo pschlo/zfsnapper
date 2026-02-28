@@ -5,8 +5,8 @@ from collections.abc import Collection
 import logging
 
 from .args import Args
-from zfsnappr.common.zfs import Snapshot, ZfsCli, Peer, Dataset
-from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_peer, get_holds
+from zfsnappr.common.zfs import Snapshot, ZfsCli, PeerInfo, Dataset
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_peerinfo, get_holds
 from zfsnappr.common.filter import SnapFilter
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
 from zfsnappr.common.replication.utils import parse_holdtags, Direction
@@ -71,10 +71,10 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, exten
 def get_snap_peers(snapshot: Snapshot, datasets: ResolvedDatasets, holdtags: dict[Snapshot, set[str]]) -> set[str]:
     dataset = datasets.path_to_dataset[snapshot.dataset]
     tags = holdtags[snapshot]
-    peers = {(hold.direction, get_peer(dataset, hold.guid)) for hold in parse_holdtags(tags)}
+    peers = {(hold.direction, get_peerinfo(dataset, hold.guid)) for hold in parse_holdtags(tags)}
     return {format_peer(dir, p) for dir, p in peers}
 
-def format_peer(direction: Direction, peer: Peer | None):
+def format_peer(direction: Direction, peer: PeerInfo | None):
     match direction:
         case Direction.SEND:
             return f"Send to {peer.host}/{peer.path} ({peer.last_used})" if peer else "Send to unknown"

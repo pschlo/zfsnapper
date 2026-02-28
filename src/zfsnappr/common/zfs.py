@@ -166,7 +166,7 @@ class Pool:
 
 
 @dataclass(eq=False)
-class Peer:
+class PeerInfo:
     guid: int
     host: ConnSpec
     path: Path
@@ -176,7 +176,7 @@ class Peer:
     def from_fields(cls, fields: dict[str, str]):
         P = PeerField
         fs = fields
-        return Peer(
+        return PeerInfo(
             guid=int(fs[P.GUID]),
             host=parse_conn(fs[P.HOST]),
             path=Path(fs[P.PATH]),
@@ -189,7 +189,7 @@ class Dataset:
     path: Path
     guid: int
     type: ZfsDatasetType
-    peer_slots: dict[int, Peer | None]
+    peerinfos: dict[int, PeerInfo | None]
 
     def __repr__(self) -> str:
         return f"Dataset({self.path})"
@@ -208,7 +208,7 @@ class Dataset:
         type = ZfsDatasetType(ps[P.TYPE].value)
 
         # Parse peer slots
-        peer_slots: dict[int, Peer | None] = {}
+        peer_slots: dict[int, PeerInfo | None] = {}
         for propkey, prop in ps.items():
             parts = propkey.split(':')
             if parts[:2] != ['zfsnappr', 'peer']:
@@ -226,13 +226,15 @@ class Dataset:
             for field in prop.value.split(';'):
                 f, v = field.split('=', maxsplit=1)
                 fields[f] = v
-            peer_slots[slot] = Peer.from_fields(fields)
+            peer_slots[slot] = PeerInfo.from_fields(fields)
+
+        # TODO: Assert no peer GUID is duplicated
 
         return Dataset(
             path=path,
             guid=guid,
             type=type,
-            peer_slots=peer_slots
+            peerinfos=peer_slots
         )
 
 

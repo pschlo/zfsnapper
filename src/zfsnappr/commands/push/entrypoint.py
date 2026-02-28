@@ -8,11 +8,11 @@ from datetime import datetime
 from zfsnappr.common.replication import ReplicationError
 from zfsnappr.common.replication.send_receive_snap import _send_receive
 from zfsnappr.common.resolve_datasets import ResolvedDatasets, create_zfs_cli, resolve_conn_datasets
-from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps, update_peer, get_holds
+from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps, update_peerinfo, get_holds
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg, DatasetSpec, ConnSpec
 from zfsnappr.common.path import Path
 from zfsnappr.common.sort import sortkey_snap_by_time
-from zfsnappr.common.zfs import ZfsCli, Dataset, Peer, Snapshot, ZfsDatasetType, ZfsProperty
+from zfsnappr.common.zfs import ZfsCli, Dataset, PeerInfo, Snapshot, ZfsDatasetType, ZfsProperty
 from zfsnappr.common.utils import group_by, combine_dicts, space
 from .args import Args
 
@@ -173,8 +173,8 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         )
 
         # Update peer information
-        update_peer(cli=source.cli, dataset=source.content.dataset, peer=to_peer(dest))
-        update_peer(cli=dest.cli, dataset=dest.content.dataset, peer=to_peer(source))
+        update_peerinfo(cli=source.cli, dataset=source.content.dataset, peer=to_peer(dest))
+        update_peerinfo(cli=dest.cli, dataset=dest.content.dataset, peer=to_peer(source))
 
         # Determine holdtags
         source.holdtag = f'zfsnappr-sendbase-{dest.content.dataset.guid}'
@@ -191,8 +191,8 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         dest.content.snaps.sort(key=sortkey_snap_by_time, reverse=True)
 
         # Update peer information
-        update_peer(cli=source.cli, dataset=source.content.dataset, peer=to_peer(dest))
-        update_peer(cli=dest.cli, dataset=dest.content.dataset, peer=to_peer(source))
+        update_peerinfo(cli=source.cli, dataset=source.content.dataset, peer=to_peer(dest))
+        update_peerinfo(cli=dest.cli, dataset=dest.content.dataset, peer=to_peer(source))
 
         # Determine holdtags
         source.holdtag = f'zfsnappr-sendbase-{dest.content.dataset.guid}'
@@ -301,7 +301,7 @@ def transfer_incremental(source: DatasetSide, dest: DatasetSide, log_indent: int
 
 def to_peer(side: DatasetSide):
     assert side.content is not None
-    return Peer(
+    return PeerInfo(
         last_used=datetime.now(),
         guid=side.content.dataset.guid,
         path=side.path,

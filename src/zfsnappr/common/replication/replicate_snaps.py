@@ -4,13 +4,13 @@ import logging
 from itertools import pairwise
 from datetime import datetime
 
-from zfsnappr.common.zfs import Snapshot, ZfsCli, Dataset, Peer
+from zfsnappr.common.zfs import Snapshot, ZfsCli, Dataset, PeerInfo
 from zfsnappr.common.replication.exception import ReplicationError
 from zfsnappr.common.path import Path
 from zfsnappr.common.parse_dataset_arg import ConnSpec
 from zfsnappr.common.sort import sortkey_snap_by_time
 from zfsnappr.common.utils import space
-from zfsnappr.common.command_utils import update_peer
+from zfsnappr.common.command_utils import update_peerinfo
 
 from .send_receive_snap import send_receive_incremental, send_receive_initial
 
@@ -112,23 +112,23 @@ def replicate_snaps_incremental(
     dest_snaps = sorted(dest_snaps, key=sortkey_snap_by_time, reverse=True)
 
     # Update peer properties on source dataset
-    source_peer = Peer(
+    source_peer = PeerInfo(
         last_used=datetime.now(),
         guid=dest_dataset.guid,
         path=dest_dataset.path,
         host=str(dest_conn)
     )
-    update_peer(cli=source_cli, dataset=source_dataset, peer=source_peer)
+    update_peerinfo(cli=source_cli, dataset=source_dataset, peer=source_peer)
 
 
     # Update peer properties on dest dataset
-    dest_peer = Peer(
+    dest_peer = PeerInfo(
         last_used=datetime.now(),
         guid=source_dataset.guid,
         path=source_dataset.path,
         host=str(source_conn)
     )
-    update_peer(cli=dest_cli, dataset=dest_dataset, peer=dest_peer)
+    update_peerinfo(cli=dest_cli, dataset=dest_dataset, peer=dest_peer)
 
 
     ##### PHASE 1: Critical preparation, check for abort conditions

@@ -1,29 +1,14 @@
 from __future__ import annotations
-from typing import Optional, Callable, cast
-from dataclasses import dataclass
-from collections.abc import Collection
 import logging
 
 from .args import Args
-from zfsnappr.common.zfs import Snapshot, ZfsCli, Peer, Dataset
-from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_peer, remove_peer
-from zfsnappr.common.resolve_datasets import resolve_conn_datasets
-from zfsnappr.common.parse_dataset_arg import parse_dataset_arg, ConnSpec
-from zfsnappr.common.path import EMPTY_PATH
-from zfsnappr.common.filter import SnapFilter
+from zfsnappr.common.zfs import ZfsCli, PeerInfo, Dataset
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, remove_peer, get_holds
+from zfsnappr.common.parse_dataset_arg import ConnSpec
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
-# from zfsnappr.common.replication.utils import 
 
 
 log = logging.getLogger(__name__)
-
-COLUMN_SEPARATOR = ' | '
-HEADER_SEPARATOR = '-'
-
-@dataclass
-class Field:
-    name: str
-    get: Callable[[Snapshot], str]
 
 
 def entrypoint(args: Args) -> None:
@@ -56,20 +41,36 @@ def sync_peer_conn(conn: ConnSpec, cli: ZfsCli, datasets: ResolvedDatasets, peer
     - Remove own peers
     - Remove holdtags on snapshots of those peers -> must get holdtags for all
     """
+    # GUID -> [dataset, peerinfo]
+    obsolete_peers: dict[int, set[tuple[Dataset, PeerInfo]]] = {}
     for peer_conn, peer_guids in peer_conn_guids.items():
         # Check peer GUIDs and prune source
-        expected_peers: dict[int, set[tuple[Dataset, Peer]]] = {}
+        expected_peers: dict[int, set[tuple[Dataset, PeerInfo]]] = {}
         for ds in datasets.matched:
-            for p in ds.peer_slots.values():
+            for p in ds.peerinfos.values():
+                # Decide whether the PeerInfo belongs to the given peer_conn
                 if p and p.host == peer_conn:
                     expected_peers.setdefault(p.guid, set()).add((ds, p))
 
-        obsolete_peers = {k: v for k, v in expected_peers.items() if k not in peer_guids}
-        print(f"Found {len(obsolete_peers)} obsolete peers from {peer_conn}")
-        for guid, _datasets in obsolete_peers.items():
-            for ds, peer in _datasets:
-                # remove_peer(cli=cli, dataset=d, peer_guid=guid)
-                print(f"Removing peer {peer} on dataset {ds}")
+        # If a GUID were already in obsolete_peers, then our match-peerinfo-to-peerconn would match
+        # a single peerinfo to multiple peerconns. This cannot happen, but we stay safe anyway.
+        for guid, v in expected_peers.items():
+            assert guid not in obsolete_peers
+            if guid not in peer_guids:
+                obsolete_peers.setdefault(guid, set()).update(v)
+
+    if not obsolete_peers:
+        log.info(f"No obsolete peers")
+        return
+
+    print(f"Found {len(obsolete_peers)} obsolete peers")
+    snaps = fetch_snaps(cli, datasets)
+    holds = get_holds(cli, snaps)
+
+    for guid, _datasets in obsolete_peers.items():
+        for ds, peer in _datasets:
+            remove_peer(cli=cli, dataset=ds, peer_guid=guid, holds=holds)
+            print(f"Removed peer {peer.host}/{peer.path} on dataset {ds.path}")
 
 
 def prune_unused_peers():

@@ -7,7 +7,7 @@ from datetime import timedelta, datetime
 from zfsnappr.common.filter import SnapFilter, snapfilters
 from zfsnappr.common.args import CommonArgs
 from zfsnappr.common.sort import sortkey_snap_by_time
-from zfsnappr.common.zfs import ZfsCli, Peer, PeerField, Dataset, Snapshot
+from zfsnappr.common.zfs import ZfsCli, PeerInfo, PeerField, Dataset, Snapshot
 from zfsnappr.common.path import Path
 from zfsnappr.common.utils import combine_dicts, group_by
 from zfsnappr.common.resolve_datasets import ResolvedDatasets, resolve_dataset_specs
@@ -79,10 +79,10 @@ def get_holds(
     return {s: tags[s.longname] for s in snapshots}
 
 
-def _set_peer_slot(
+def _set_peerinfo_slot(
     cli: ZfsCli,
     dataset: Dataset,
-    peer: Peer,
+    peer: PeerInfo,
     slot: int
 ):
     """Serializes the peer and stores it at the given slot on the dataset."""
@@ -96,46 +96,46 @@ def _set_peer_slot(
     prop = f"zfsnappr:peer:{slot}"
 
     cli.set_property(dataset.path, prop, value)
-    dataset.peer_slots[slot] = peer
+    dataset.peerinfos[slot] = peer
 
 
-def _clear_peer_slot(
+def _clear_peerinfo_slot(
     cli: ZfsCli,
     dataset: Dataset,
     slot: int
 ):
     cli.unset_property(dataset.path, f'zfsnappr:peer:{slot}')
-    dataset.peer_slots[slot] = None
+    dataset.peerinfos[slot] = None
 
 
-def update_peer(
+def update_peerinfo(
     cli: ZfsCli,
     dataset: Dataset,
-    peer: Peer,
+    peer: PeerInfo,
 ):
     """Update peer if it already exists, else add under first free slot."""
     # Find peer GUID
-    curr_slot = next((slot for slot, p in dataset.peer_slots.items() if p is not None and p.guid == peer.guid), None)
+    curr_slot = next((slot for slot, p in dataset.peerinfos.items() if p is not None and p.guid == peer.guid), None)
     if curr_slot is not None:
         # Peer already exists in slot; overwrite
-        _set_peer_slot(cli=cli, dataset=dataset, peer=peer, slot=curr_slot)
+        _set_peerinfo_slot(cli=cli, dataset=dataset, peer=peer, slot=curr_slot)
         return
 
     # Find first free slot
-    slot = next((slot for slot, p in dataset.peer_slots.items() if p is None), None)
+    slot = next((slot for slot, p in dataset.peerinfos.items() if p is None), None)
     if slot is None:
         raise RuntimeError(f"Cannot set peer on dataset {dataset.path}: No free slots")
-    _set_peer_slot(cli=cli, dataset=dataset, peer=peer, slot=slot)
+    _set_peerinfo_slot(cli=cli, dataset=dataset, peer=peer, slot=slot)
 
 
-def get_peer(
+def get_peerinfo(
     dataset: Dataset,
     guid: int
-) -> Peer | None:
-    return next((p for slot, p in dataset.peer_slots.items() if p is not None and p.guid == guid), None)
+) -> PeerInfo | None:
+    return next((p for slot, p in dataset.peerinfos.items() if p is not None and p.guid == guid), None)
 
 
-def prune_old_peers(
+def prune_stale_peers(
     cli: ZfsCli,
     dataset: Dataset,
     snapshots: Collection[Snapshot],
@@ -143,45 +143,51 @@ def prune_old_peers(
 ):
     # Collect peers that were not used within the given timedelta.
     # This means the peer was neither send to nor received from.
-    remove_peers: set[tuple[int, Peer]] = set()
+    remove_peers: set[PeerInfo] = set()
     threshold = datetime.now() - remove_older_than
-    for slot, peer in dataset.peer_slots.items():
+    for peer in dataset.peerinfos.values():
         if peer is None:
             continue
         if peer.last_used < threshold:
-            remove_peers.add((slot, peer))
+            remove_peers.add(peer)
 
     if not remove_peers:
-        print(f"No peers to prune")
+        print(f"No stale peers")
         return
 
-    # Collect all snapshot holds
-    _holds = get_holds(cli, snapshots)
-    peerguid_to_snaps: dict[int, dict[ReplicationHold, set[Snapshot]]] = {}
-    for snap, _holds in _holds.items():
-        for h in parse_holdtags(_holds):
-            (
-                peerguid_to_snaps
-                .setdefault(h.guid, {})
-                .setdefault(h, set())
-                .add(snap)
-            )
-
     # Remove peers and snapshot holds
-    for slot, peer in remove_peers:
-        print("Removing peer:", peer)
-        _clear_peer_slot(cli=cli, dataset=dataset, slot=slot)
-        # Remove relevant holds
-        for hold, snaps in peerguid_to_snaps[peer.guid].items():
-            cli.release_hold([s.longname for s in snaps], hold.to_tag())
+    holds = get_holds(cli, snapshots)
+    print(f"Removing {len(remove_peers)} stale peers")
+    for peer in remove_peers:
+        remove_peer(cli, dataset, peer.guid, holds=holds)
 
 
 def remove_peer(
     cli: ZfsCli,
     dataset: Dataset,
-    peer_guid: int
+    peer_guid: int,
+    holds: dict[Snapshot, set[str]]
 ):
-    slot = next((slot for slot, p in dataset.peer_slots.items() if p and p.guid == peer_guid), None)
-    if slot is None:
+    """Removes both PeerInfo and holds of peer with given GUID."""
+    r = next(((slot, p) for slot, p in dataset.peerinfos.items() if p and p.guid == peer_guid), None)
+    if r is None:
         raise KeyError()
-    _clear_peer_slot(cli=cli, dataset=dataset, slot=slot)
+    slot, peer = r
+    print(f"Removing peer: {peer.host}/{peer.path}")
+
+    # Clear slot
+    _clear_peerinfo_slot(cli=cli, dataset=dataset, slot=slot)
+
+    # Determine relevant holds
+    relevant_holds: dict[ReplicationHold, set[Snapshot]] = {}
+    for snap, _holds in holds.items():
+        for h in parse_holdtags(_holds):
+            if h.guid == peer_guid:
+                relevant_holds.setdefault(h, set()).add(snap)
+
+    log.info(f"Removing {len(relevant_holds)} obsolete holds")
+    for i, (hold, snaps) in enumerate(relevant_holds.items()):
+        cli.release_hold([s.longname for s in snaps], hold.to_tag())
+        for s in snaps:
+            s.holds -= 1
+        log.info(f"{i+1}/{len(relevant_holds)} removed")
