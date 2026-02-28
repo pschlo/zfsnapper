@@ -32,10 +32,10 @@ def entrypoint(args: Args) -> None:
         _first = False
 
         log.info(f"[{conn}] Syncing peers")
-        sync_peer_conn(conn=conn, cli=cli, datasets=datasets, peer_conn_guids=peer_conn_guids)
+        sync_peer_conn(conn=conn, cli=cli, datasets=datasets, peer_conn_guids=peer_conn_guids, dry_run=args.dry_run)
 
 
-def sync_peer_conn(conn: ConnSpec, cli: ZfsCli, datasets: ResolvedDatasets, peer_conn_guids: dict[ConnSpec, set[int]]):
+def sync_peer_conn(conn: ConnSpec, cli: ZfsCli, datasets: ResolvedDatasets, peer_conn_guids: dict[ConnSpec, set[int]], dry_run: bool):
     """
     - Check existing GUIDs on dest
     - Remove own peers
@@ -64,9 +64,12 @@ def sync_peer_conn(conn: ConnSpec, cli: ZfsCli, datasets: ResolvedDatasets, peer
         return
 
     print(f"Found {len(obsolete_peers)} obsolete peers")
+    if dry_run:
+        log.info("Dry-run enabled, not removing any peers")
+        return
+
     snaps = fetch_snaps(cli, datasets)
     holds = get_holds(cli, snaps)
-
     for guid, _datasets in obsolete_peers.items():
         for ds, peer in _datasets:
             remove_peer(cli=cli, dataset=ds, peer_guid=guid, holds=holds)
