@@ -54,9 +54,9 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
 
         # Dest dataset does not exist; cannot fetch snapshots.
         if not allow_init:
-            raise ReplicationError(f"Destination dataset '{dest.path}' does not exist and will not be created", log_indent=2)
+            raise ReplicationError(f"Destination dataset '{dest.path}' does not exist and will not be created", log_indent=log_indent)
         # Do initial send-receive to create dest dataset.
-        transfer_initial(source, dest, snapshot=source.snaps[-1])
+        transfer_initial(source, dest, snapshot=source.snaps[-1], log_indent=log_indent)
 
         # Fetch the newly created dataset and set base snaps
         source.base_snap = source.snaps[-1]
@@ -94,27 +94,30 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         source.base_snap, dest.base_snap = determine_latest_common(source, dest)
 
         # Check holds
-        ensure_holds(source, dest)
+        ensure_holds(source, dest, log_indent=log_indent)
 
         # figure out base index
         if source.base_snap is None or dest.base_snap is None:
-            raise ReplicationError(f"Source '{source.path}' and destination '{dest.path}' have no common snapshot", log_indent=log_indent)
+            raise ReplicationError(f"Source '{source.path}' and destination '{dest.path}' have no common snapshots", log_indent=log_indent)
         if dest.base_snap.guid != dest.snaps[0].guid:
             raise ReplicationError(f"Destination '{dest.path}' has snapshots newer than latest common snapshot '{dest.base_snap.shortname}'", log_indent=log_indent)
 
         # Check base snap tags
-        check_base_snap_tags(source, dest)
+        check_base_snap_tags(source, dest, log_indent=log_indent)
 
         # Optionally rollback dest
         if rollback:
             log.info(_s() + f"Rolling back destination to latest snapshot")
             dest.cli.rollback(dest.snaps[0].longname)
 
-    transfer_incremental(source, dest)
+    replicate_incrementally(source, dest, log_indent=log_indent)
 
 
 def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot, log_indent: int = 0):
     """Perform a single initial send-receive, thereby creating the dest dataset."""
+    def _s(level: int = 0):
+        return space(log_indent + level)
+
     assert is_set(source.dataset) and is_set(source.snaps)
     assert source.dataset.type in (ZfsDatasetType.FILESYSTEM, ZfsDatasetType.VOLUME)
     properties: dict[str, str] = {
@@ -126,17 +129,19 @@ def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot,
             ZfsProperty.CANMOUNT: 'off',
             ZfsProperty.MOUNTPOINT: 'none'
         }
+
+    log.info(_s() + f"Creating destination dataset by transferring oldest snapshot")
     _send_receive(
         clis=(source.cli, dest.cli),
         dest_dataset=dest.path,
         snapshot=snapshot,
         base=None,
         properties=properties,
-        log_indent=log_indent
+        log_indent=log_indent + 1
     )
 
 
-def transfer_incremental(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
+def replicate_incrementally(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
     """Base snapshot must be held."""
     def _s(level: int = 0):
         return space(log_indent + level)
@@ -159,7 +164,7 @@ def transfer_incremental(source: DatasetSide, dest: DatasetSide, log_indent: int
         return
 
     # Check for timestamp conflicts
-    check_timestamp_conflicts(source, dest, transfer_sequence=transfer_sequence)
+    check_timestamp_conflicts(source, dest, transfer_sequence=transfer_sequence, log_indent=log_indent)
 
     total = len(transfer_sequence) - 1
     log.info(_s() + f"Destination is {total} snapshots behind")
@@ -233,7 +238,6 @@ def ensure_holds(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
     assert is_set(source.snaps) and is_set(dest.snaps)
     assert is_set(source.holdtag) and is_set(dest.holdtag)
     assert is_set(source.base_snap) and is_set(dest.base_snap)
-    assert source.base_snap is not None and dest.base_snap is not None
 
     """Ensures the latest common snapshot is held on both sides. Removes all other peer holdtags.
 
