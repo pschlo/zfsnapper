@@ -39,11 +39,11 @@ class ReplicationHold:
                 assert False
 
 
-def parse_holdtags(tags: Collection[str]) -> set[ReplicationHold]:
-    res: set[ReplicationHold] = set()
+def parse_holdtags(tags: Collection[str]) -> list[ReplicationHold]:
+    res: list[ReplicationHold] = []
     for tag in tags:
         try:
-            res.add(ReplicationHold.from_tag(tag))
+            res.append(ReplicationHold.from_tag(tag))
         except ValueError:
             pass
     return res

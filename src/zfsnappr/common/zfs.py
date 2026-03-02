@@ -343,7 +343,7 @@ class ZfsCli(ABC):
         properties = list(dict.fromkeys(REQUIRED_DATASET_PROPS + list(properties)))  # eliminate duplicates
 
         # Add peer slots
-        properties += [f'zfsnappr:peer:{i}' for i in range(30)]
+        properties += [f'zfsnappr:peer:{i}' for i in range(50)]
 
         cmd: list[str] = [
             'zfs', 'get', '-Hp',
