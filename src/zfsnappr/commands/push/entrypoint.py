@@ -18,6 +18,8 @@ log = logging.getLogger(__name__)
 def entrypoint(args: Args) -> None:
     src_resolved = resolve_dataset_args(args)
     dest_spec = parse_dataset_arg(args.dest)
+    if not dest_spec.dataset:
+        raise ValueError("No destination dataset root specified")
     dest_cli = create_zfs_cli(dest_spec.conn)
 
     _first = True
