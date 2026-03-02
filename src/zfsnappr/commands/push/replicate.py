@@ -7,7 +7,7 @@ from itertools import pairwise
 from datetime import datetime
 
 from zfsnappr.common.replication import ReplicationError
-from zfsnappr.common.replication.send_receive_snap import _send_receive
+from zfsnappr.common.replication.send_receive import send_receive
 from zfsnappr.common.command_utils import update_peerinfo, get_holds
 from zfsnappr.common.parse_dataset_arg import ConnSpec
 from zfsnappr.common.path import Path
@@ -131,7 +131,7 @@ def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot,
         }
 
     log.info(_s() + f"Creating destination dataset by transferring oldest snapshot")
-    _send_receive(
+    send_receive(
         clis=(source.cli, dest.cli),
         dest_dataset=dest.path,
         snapshot=snapshot,
@@ -172,7 +172,7 @@ def replicate_incrementally(source: DatasetSide, dest: DatasetSide, log_indent: 
         log.info(_s() + f"Transferring snapshot [{i+1}/{total}]: {snap.shortname}")
 
         # Transfer snapshot
-        _send_receive(
+        send_receive(
             clis=(source.cli, dest.cli),
             dest_dataset=dest.path,
             snapshot=snap,

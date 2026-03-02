@@ -27,7 +27,7 @@ def start_progress_thread(send_proc, on_progress: Callable[[str], Any]):
     return t
 
 
-def _send_receive(
+def send_receive(
     clis: tuple[ZfsCli, ZfsCli],
     dest_dataset: Path,
     snapshot: Snapshot,
@@ -115,52 +115,3 @@ def _send_receive(
             f"Replication of snapshot '{snapshot.shortname}' from '{snapshot.dataset}' to '{dest_dataset}' failed",
             log_indent=log_indent
         ) from e
-
-
-def send_receive_initial(
-    clis: tuple[ZfsCli, ZfsCli],
-    dest_dataset: Path,
-    source_dataset_type: ZfsDatasetType,
-    snapshot: Snapshot,
-    holdtags: tuple[Callable[[Dataset], str], Callable[[Dataset], str]],
-    log_indent: int = 0
-) -> None:
-    """Perform a single initial send-receive, thereby creating the dest dataset."""
-    assert source_dataset_type in (ZfsDatasetType.FILESYSTEM, ZfsDatasetType.VOLUME)
-    properties: dict[str, str] = {
-        ZfsProperty.READONLY: 'on'
-    }
-    if source_dataset_type == ZfsDatasetType.FILESYSTEM:
-        properties |= {
-            ZfsProperty.ATIME: 'off',
-            ZfsProperty.CANMOUNT: 'off',
-            ZfsProperty.MOUNTPOINT: 'none'
-        }
-    _send_receive(
-        clis=clis,
-        dest_dataset=dest_dataset,
-        snapshot=snapshot,
-        base=None,
-        holdtags=holdtags,
-        properties=properties,
-        log_indent=log_indent
-    )
-
-
-def send_receive_incremental(
-    clis: tuple[ZfsCli, ZfsCli],
-    dest_dataset: Path,
-    holdtags: tuple[str,str],
-    snapshot: Snapshot,
-    base: Snapshot,
-    log_indent: int = 0
-) -> None:
-    """Perform a single incremental send-receive."""
-    _send_receive(
-        clis=clis,
-        dest_dataset=dest_dataset,
-        snapshot=snapshot,
-        base=base,
-        holdtags=holdtags,
-        log_indent=log_indent
-    )
