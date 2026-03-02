@@ -12,6 +12,7 @@ log = logging.getLogger(__name__)
 
 
 def entrypoint(args: Args) -> None:
+    """TODO: Also allow for matching by pool GUID (more precise)"""
     resolved = resolve_dataset_args(args)
     resolved_dests = resolve_dataset_args(include_recurse=args.peer)
 
