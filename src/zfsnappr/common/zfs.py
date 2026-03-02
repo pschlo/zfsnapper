@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from itertools import batched
 import shlex
 import logging
-from zfsnappr.common.parse_dataset_arg import ConnSpec, parse_conn
+from zfsnappr.common.parse_dataset_arg import ConnSpec
 
 from .path import Path
 
@@ -178,7 +178,7 @@ class PeerInfo:
         fs = fields
         return PeerInfo(
             guid=int(fs[P.GUID]),
-            host=parse_conn(fs[P.HOST]),
+            host=ConnSpec.parse(fs[P.HOST]),
             path=Path(fs[P.PATH]),
             last_used=datetime.fromtimestamp(int(fs[P.LAST_USED]))
         )

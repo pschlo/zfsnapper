@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 import string
+import platform
 from .path import Path
+
+
+LOCALHOST = "_local"
 
 
 @dataclass(frozen=True, eq=True)
@@ -11,7 +15,7 @@ class ConnSpec:
 
     def __str__(self) -> str:
         if self.host is None:
-            return "LOCAL"
+            return f"{platform.node()} (local)"
 
         res = self.host
         if self.user:
@@ -19,6 +23,65 @@ class ConnSpec:
         if self.port:
             res = f"{res}:{self.port}"
         return res
+
+    def serialize(self) -> str:
+        if self.host is None:
+            return f"{LOCALHOST}"
+
+        res = self.host
+        if self.user:
+            res = f"{self.user}@{res}"
+        if self.port:
+            res = f"{res}:{self.port}"
+        return res
+
+    @classmethod
+    def parse(cls, value: str):
+        # Split value into user + hostport
+        if value:
+            _parts = value.split('@')
+            if not all(_parts):
+                raise ConnParseError(value)
+            if len(_parts) == 1:
+                user, _hostport = None, _parts[0]
+            elif len(_parts) == 2:
+                user, _hostport = _parts
+            else:
+                raise ConnParseError(value)
+        else:
+            user, _hostport = None, None
+
+        # Split hostport into host + port
+        if _hostport is not None:
+            _parts = _hostport.rsplit(':', maxsplit=1)
+            if not all(_parts):
+                raise ConnParseError(value)
+            if len(_parts) == 1:
+                host, port = _parts[0], None
+            elif len(_parts) == 2:
+                host, port = _parts[0], int(_parts[1])
+            else:
+                raise ConnParseError(value)
+        else:
+            host, port = None, None
+
+        if host == LOCALHOST:
+            host = None
+
+        # Validate
+        if not all([
+            not user or is_alnum(user),
+            not host or is_alnum(host),
+            host or (not user and not port)  # not host IMPLIES not user and not port
+        ]):
+            raise ConnParseError(value)
+
+        return cls(
+            user=user,
+            host=host,
+            port=port
+        )
+
 
 
 @dataclass(frozen=True)
@@ -66,49 +129,8 @@ def parse_dataset_arg(arg: str) -> DatasetSpec:
     ):
         raise DatasetParseError(arg)
 
-    conn = parse_conn(_conn)
+    conn = ConnSpec.parse(_conn)
     return DatasetSpec(
         conn=conn,
         dataset=Path(dataset)
-    )
-
-
-def parse_conn(value: str) -> ConnSpec:
-    if value:
-        _parts = value.split('@')
-        if not all(_parts):
-            raise ConnParseError(value)
-        if len(_parts) == 1:
-            user, _hostport = None, _parts[0]
-        elif len(_parts) == 2:
-            user, _hostport = _parts
-        else:
-            raise ConnParseError(value)
-    else:
-        user, _hostport = None, None
-
-    if _hostport is not None:
-        _parts = _hostport.rsplit(':', maxsplit=1)
-        if not all(_parts):
-            raise ConnParseError(value)
-        if len(_parts) == 1:
-            host, port = _parts[0], None
-        elif len(_parts) == 2:
-            host, port = _parts[0], int(_parts[1])
-        else:
-            raise ConnParseError(value)
-    else:
-        host, port = None, None
-
-    # Validate
-    if not all([
-        not user or is_alnum(user),
-        not host or is_alnum(host),
-    ]):
-        raise ConnParseError(value)
-    
-    return ConnSpec(
-        user=user,
-        host=host,
-        port=port
     )
