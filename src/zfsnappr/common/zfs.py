@@ -228,7 +228,14 @@ class Dataset:
                 fields[f] = v
             peer_slots[slot] = PeerInfo.from_fields(fields)
 
-        # TODO: Assert no peer GUID is duplicated
+        # Assert no peer GUID is duplicated
+        _guids: set[int] = set()
+        for p in peer_slots.values():
+            if p is None:
+                continue
+            if p.guid in _guids:
+                raise ValueError(f"Duplicate peer GUID: {p.guid}")
+            _guids.add(p.guid)
 
         return Dataset(
             path=path,
