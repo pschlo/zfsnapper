@@ -103,25 +103,22 @@ def sync_peer_conn(
     """
     def _s(i: int = 0):
         return space(i+1)
-    
+
     now = datetime.now()
 
     def should_remove(p: PeerInfo) -> bool:
         # Check prune_exact
         if DatasetSpec(p.host, p.path) in prune_exact:
-            # TO REMOVE
             return True
 
         # Check sync_conns
         for peer_conn, peer_guids in sync_conns_guids.items():
             if p.host == peer_conn and p.guid not in peer_guids:
-                # TO REMOVE
                 return True
 
         # Check sync_pools
         for (peer_conn, peer_pool), peer_guids in sync_pools_guids.items():
             if p.pool_guid == peer_pool.guid and p.guid not in peer_guids:
-                # TO REMOVE
                 return True
             
         # Check last used
@@ -130,6 +127,8 @@ def sync_peer_conn(
 
         return False
 
+    # We don't remove a peer in general; we always remove a peer *from a dataset*.
+    # E.g. a peer may be kept on one dataset but removed from another.
     remove_peers: set[tuple[Dataset, PeerInfo]] = set()
     for ds in datasets.matched:
         for p in ds.peerinfos.values():

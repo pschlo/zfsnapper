@@ -133,7 +133,9 @@ def remove_peer(
     holds: dict[Snapshot, set[str]],
     log_indent: int = 0
 ):
-    """Removes both PeerInfo and holds of peer with given GUID."""
+    """Removes peer from dataset.
+    
+    Removes both PeerInfo and holds of peer."""
     def _s(i: int = 0):
         return space(log_indent+i)
 
@@ -141,21 +143,22 @@ def remove_peer(
     if r is None:
         raise KeyError()
     slot, peer = r
-    # log.info(_s() + f"Dataset {dataset.path}: removing peer {peer.host}::{peer.path}")
 
-    # Clear slot
+    # # Clear slot
     _clear_peerinfo_slot(cli=cli, dataset=dataset, slot=slot)
 
-    # Determine relevant holds
-    relevant_holds: dict[ReplicationHold, set[Snapshot]] = {}
+    # Determine peer holds on that dataset
+    remove_holds: dict[ReplicationHold, set[Snapshot]] = {}
     for snap, _holds in holds.items():
+        if snap.dataset != dataset.path:
+            continue
         for h in parse_holdtags(_holds):
             if h.guid == peer_guid:
-                relevant_holds.setdefault(h, set()).add(snap)
+                remove_holds.setdefault(h, set()).add(snap)
 
-    # log.info(_s() + f"Removing {len(relevant_holds)} obsolete holds")
-    for i, (hold, snaps) in enumerate(relevant_holds.items()):
+    log.debug(_s() + f"Removing {len(remove_holds)} obsolete holds")
+    for i, (hold, snaps) in enumerate(remove_holds.items()):
         cli.release_hold([s.longname for s in snaps], hold.to_tag())
         for s in snaps:
             s.holds -= 1
-        # log.info(_s(1) + f"{i+1}/{len(relevant_holds)} removed")
+        log.debug(_s(1) + f"{i+1}/{len(remove_holds)} removed")

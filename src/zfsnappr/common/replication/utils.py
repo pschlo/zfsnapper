@@ -10,7 +10,7 @@ class Direction(StrEnum):
     RECEIVE = 'receive'
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=True)
 class ReplicationHold:
     direction: Direction
     guid: int
