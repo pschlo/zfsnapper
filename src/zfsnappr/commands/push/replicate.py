@@ -65,10 +65,6 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         dest.snaps = [dest.base_snap]
         dest.dataset = dest.cli.get_dataset(dest.path)
 
-        # Update peer information
-        update_peerinfo(cli=source.cli, dataset=source.dataset, peer=to_peer(dest))
-        update_peerinfo(cli=dest.cli, dataset=dest.dataset, peer=to_peer(source))
-
         # Determine holdtags
         source.holdtag = f'zfsnappr-sendbase-{dest.dataset.guid}'
         dest.holdtag = f'zfsnappr-recvbase-{source.dataset.guid}'
@@ -82,10 +78,6 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
     else:
         # Ensure sorting
         dest.snaps.sort(key=sortkey_snap_by_time, reverse=True)
-
-        # Update peer information
-        update_peerinfo(cli=source.cli, dataset=source.dataset, peer=to_peer(dest))
-        update_peerinfo(cli=dest.cli, dataset=dest.dataset, peer=to_peer(source))
 
         # Determine holdtags
         source.holdtag = f'zfsnappr-sendbase-{dest.dataset.guid}'
@@ -110,6 +102,11 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         if rollback:
             log.info(_s() + f"Rolling back destination to latest snapshot")
             dest.cli.rollback(dest.snaps[0].longname)
+
+
+    # Update peer information
+    update_peerinfo(cli=source.cli, dataset=source.dataset, peer=to_peer(dest))
+    update_peerinfo(cli=dest.cli, dataset=dest.dataset, peer=to_peer(source))
 
     replicate_incrementally(source, dest, log_indent=log_indent)
 

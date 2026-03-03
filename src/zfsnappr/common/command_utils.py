@@ -126,33 +126,6 @@ def get_peerinfo(
     return next((p for slot, p in dataset.peerinfos.items() if p is not None and p.guid == guid), None)
 
 
-def prune_stale_peers(
-    cli: ZfsCli,
-    dataset: Dataset,
-    snapshots: Collection[Snapshot],
-    remove_older_than: relativedelta | timedelta
-):
-    # Collect peers that were not used within the given timedelta.
-    # This means the peer was neither send to nor received from.
-    remove_peers: set[PeerInfo] = set()
-    threshold = datetime.now() - remove_older_than
-    for peer in dataset.peerinfos.values():
-        if peer is None:
-            continue
-        if peer.last_used < threshold:
-            remove_peers.add(peer)
-
-    if not remove_peers:
-        print(f"No stale peers")
-        return
-
-    # Remove peers and snapshot holds
-    holds = get_holds(cli, snapshots)
-    print(f"Removing {len(remove_peers)} stale peers")
-    for peer in remove_peers:
-        remove_peer(cli, dataset, peer.guid, holds=holds)
-
-
 def remove_peer(
     cli: ZfsCli,
     dataset: Dataset,

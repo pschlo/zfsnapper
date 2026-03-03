@@ -3,8 +3,7 @@ from dateutil.relativedelta import relativedelta
 import re
 from argparse import ArgumentParser
 
-from .policy import parse_duration
-
+from zfsnappr.common.parse_duration import parse_duration
 from zfsnappr.common.args import CommonArgs
 
 

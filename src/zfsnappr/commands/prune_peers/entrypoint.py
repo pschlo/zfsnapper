@@ -1,5 +1,7 @@
 from __future__ import annotations
 import logging
+from dateutil.relativedelta import relativedelta
+from datetime import datetime
 
 from .args import Args
 from zfsnappr.common.zfs import ZfsCli, PeerInfo, Dataset, Pool
@@ -9,6 +11,7 @@ from zfsnappr.common.parse_dataset_arg import parse_dataset_arg
 from zfsnappr.common.parse_dataset_arg import ConnSpec, DatasetSpec, Path
 from zfsnappr.common.utils import group_by, space
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
+from zfsnappr.common.parse_duration import parse_duration
 
 
 log = logging.getLogger(__name__)
@@ -71,10 +74,28 @@ def entrypoint(args: Args) -> None:
         _first = False
 
         log.info(f"[{conn}] Syncing peers")
-        sync_peer_conn(conn=conn, cli=cli, datasets=datasets, prune_exact=prune_exact, sync_conns_guids=sync_conns_guids, sync_pools_guids=sync_pools_guids, dry_run=args.dry_run)
+        sync_peer_conn(
+            conn=conn,
+            cli=cli,
+            datasets=datasets,
+            prune_exact=prune_exact,
+            sync_conns_guids=sync_conns_guids,
+            sync_pools_guids=sync_pools_guids,
+            dry_run=args.dry_run,
+            remove_older_than=parse_duration(args.unused_for) if args.unused_for is not None else None
+        )
 
 
-def sync_peer_conn(conn: ConnSpec, cli: ZfsCli, datasets: ResolvedDatasets, prune_exact: set[DatasetSpec], sync_conns_guids: dict[ConnSpec, set[int]], sync_pools_guids: dict[tuple[ConnSpec, Pool], set[int]], dry_run: bool):
+def sync_peer_conn(
+    conn: ConnSpec,
+    cli: ZfsCli,
+    datasets: ResolvedDatasets,
+    prune_exact: set[DatasetSpec],
+    sync_conns_guids: dict[ConnSpec, set[int]],
+    sync_pools_guids: dict[tuple[ConnSpec, Pool], set[int]],
+    dry_run: bool,
+    remove_older_than: relativedelta | None
+):
     """
     - Check existing GUIDs on dest
     - Remove own peers
@@ -82,6 +103,8 @@ def sync_peer_conn(conn: ConnSpec, cli: ZfsCli, datasets: ResolvedDatasets, prun
     """
     def _s(i: int = 0):
         return space(i+1)
+    
+    now = datetime.now()
 
     def should_remove(p: PeerInfo) -> bool:
         # Check prune_exact
@@ -100,6 +123,10 @@ def sync_peer_conn(conn: ConnSpec, cli: ZfsCli, datasets: ResolvedDatasets, prun
             if p.pool_guid == peer_pool.guid and p.guid not in peer_guids:
                 # TO REMOVE
                 return True
+            
+        # Check last used
+        if remove_older_than is not None and p.last_used < now - remove_older_than:
+            return True
 
         return False
 
