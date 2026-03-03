@@ -12,7 +12,7 @@ from zfsnappr.common.command_utils import update_peerinfo, get_holds
 from zfsnappr.common.parse_dataset_arg import ConnSpec
 from zfsnappr.common.path import Path
 from zfsnappr.common.sort import sortkey_snap_by_time
-from zfsnappr.common.zfs import ZfsCli, Dataset, PeerInfo, Snapshot, ZfsDatasetType, ZfsProperty
+from zfsnappr.common.zfs import ZfsCli, Dataset, PeerInfo, Snapshot, ZfsDatasetType, ZfsProperty, Pool
 from zfsnappr.common.utils import space
 
 
@@ -34,6 +34,7 @@ class DatasetSide:
     cli: ZfsCli
     root: Path
     path: Path
+    pool: Pool
     dataset: Dataset | NotSet = NOT_SET
     snaps: list[Snapshot] | NotSet = NOT_SET
     holdtag: str | NotSet = NOT_SET
@@ -200,6 +201,7 @@ def to_peer(side: DatasetSide):
         last_used=datetime.now(),
         guid=side.dataset.guid,
         path=side.path,
+        pool_guid=side.pool.guid,
         host=side.conn
     )
 

@@ -73,9 +73,9 @@ def get_snap_peers(snapshot: Snapshot, datasets: ResolvedDatasets, holdtags: Map
 def format_peerinfo(direction: Direction, peer: PeerInfo | None):
     match direction:
         case Direction.SEND:
-            return f"Send to {peer.host}::{peer.path} ({peer.last_used})" if peer else "Send to unknown"
+            return f"Send to {peer.host}::{peer.path} ({peer.last_used}) {peer.pool_guid}" if peer else "Send to unknown"
         case Direction.RECEIVE:
-            return f"Receive from {peer.host}::{peer.path} ({peer.last_used})" if peer else "Receive from unknown"
+            return f"Receive from {peer.host}::{peer.path} ({peer.last_used}) {peer.pool_guid}" if peer else "Receive from unknown"
         case _:
             assert False
 

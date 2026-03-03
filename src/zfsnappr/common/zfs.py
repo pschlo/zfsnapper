@@ -65,6 +65,7 @@ class PeerField(StrEnum):
     GUID = 'guid'
     HOST = 'host'
     PATH = 'path'
+    POOL_GUID = 'pool_guid'
     LAST_USED = 'last_used'
 
 
@@ -164,12 +165,26 @@ class Pool:
     name: str
     guid: int
 
+    @classmethod
+    def from_props(cls, properties: Collection[Property]):
+        P = ZfsProperty
+        ps = {p.propname: p for p in properties}
+
+        name = ps[P.NAME].value
+        guid = int(ps[P.GUID].value)
+
+        return Pool(
+            name=name,
+            guid=guid,
+        )
+
 
 @dataclass(eq=False)
 class PeerInfo:
     guid: int
     host: ConnSpec
     path: Path
+    pool_guid: int
     last_used: datetime
 
     @classmethod
@@ -180,8 +195,19 @@ class PeerInfo:
             guid=int(fs[P.GUID]),
             host=ConnSpec.parse(fs[P.HOST]),
             path=Path(fs[P.PATH]),
+            pool_guid=int(fs.get(P.POOL_GUID, 0)),
             last_used=datetime.fromtimestamp(int(fs[P.LAST_USED]))
         )
+
+    def serialize(self) -> str:
+        field_values: dict[PeerField, str] = {
+            PeerField.GUID: str(self.guid),
+            PeerField.PATH: str(self.path),
+            PeerField.HOST: self.host.serialize(),
+            PeerField.POOL_GUID: str(self.pool_guid),
+            PeerField.LAST_USED: str(int(self.last_used.timestamp()))
+        }
+        return ';'.join(f'{f}={v}' for f, v in field_values.items())
 
 
 @dataclass(eq=False)
@@ -327,11 +353,40 @@ class ZfsCli(ABC):
             return
         self._run_text_command(['zfs', 'release', tag, *snapshots_fullnames])
 
-    def get_pool_from_dataset(self, dataset: Path | str) -> Pool:
-        name = Path(dataset)[0]
-        guid = self._run_text_command(['zpool', 'get', '-Hp', '-o', 'value', 'guid', name])
-        return Pool(name=name, guid=int(guid))
-  
+
+    def get_pools(self, poolnames: Collection[str] | None = None) -> list[Pool]:
+        if poolnames is not None and not poolnames:
+            # empty container
+            return []
+        
+        properties = [ZfsProperty.NAME, ZfsProperty.GUID]
+
+        cmd = [
+            'zpool', 'get', '-Hp',
+            '-o', 'name,property,value,source',
+            ','.join(properties)
+        ]
+        if poolnames is not None:
+            cmd += list(poolnames)
+        lines = self._run_text_command(cmd).splitlines()
+
+        # Group properties by dataset path
+        pool_to_props: dict[str, set[Property]] = {}
+        for line in lines:
+            name, prop, value, source = line.split('\t')
+            pool_to_props.setdefault(name, set()).add(
+                Property.from_raw(prop, value, source)
+            )
+
+        # Create datasets
+        pools = [Pool.from_props(props) for props in pool_to_props.values()]
+        return pools
+
+    
+    def get_pool(self, poolname: str) -> Pool:
+        return next(iter(self.get_pools([poolname])))
+
+
     def get_datasets(
         self,
         paths: Collection[Path | str] | None = None,

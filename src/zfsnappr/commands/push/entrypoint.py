@@ -6,7 +6,7 @@ from zfsnappr.common.resolve_datasets import ResolvedDatasets, create_zfs_cli, r
 from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg, ConnSpec
 from zfsnappr.common.path import Path
-from zfsnappr.common.zfs import ZfsCli
+from zfsnappr.common.zfs import ZfsCli, Pool
 from zfsnappr.common.utils import group_by, space
 from .replicate import replicate, DatasetSide, NOT_SET
 from .args import Args
@@ -22,6 +22,10 @@ def entrypoint(args: Args) -> None:
         raise ValueError("No destination dataset root specified")
     dest_cli = create_zfs_cli(dest_spec.conn)
 
+    # Determine dest pool GUID
+    dest_dataset_poolname = dest_spec.dataset[0]
+    dest_pool = dest_cli.get_pool(dest_dataset_poolname)
+
     _first = True
     for conn, (datasets, cli) in src_resolved.items():
         if not _first:
@@ -33,7 +37,8 @@ def entrypoint(args: Args) -> None:
             src_datasets=datasets,
             dest_cli=dest_cli,
             dest_root=dest_spec.dataset,
-            allow_initialize=args.init,
+            dest_pool=dest_pool,
+            allow_init=args.init,
             rollback=args.rollback,
             src_conn=conn,
             dst_conn=dest_spec.conn
@@ -45,7 +50,8 @@ def push_conn(
     dest_cli: ZfsCli,
     src_datasets: ResolvedDatasets,
     dest_root: Path,
-    allow_initialize: bool,
+    dest_pool: Pool,
+    allow_init: bool,
     rollback: bool,
     src_conn: ConnSpec,
     dst_conn: ConnSpec
@@ -55,10 +61,15 @@ def push_conn(
     """
     def _s(level: int = 0):
         return space(level)
+    
+    # Identify src pools
+    _poolnames = {d.poolname for d in src_datasets.matched}
+    src_pools = {pool.name: pool for pool in src_cli.get_pools(_poolnames)}
+    
 
     # Find longest common src prefix; may be empty path
     src_root = src_datasets.p.deepest_common_ancestor
-    log.info(f"[{src_conn} → {dst_conn}] Replicating: {src_root} → {dest_root}")
+    log.info(f"[{src_conn} → {dst_conn}] Replicating: {src_root}/* → {dest_root}/*")
 
     # Create matching of source dataset to dest dataset
     srcpath_to_destpath = {
@@ -97,6 +108,7 @@ def push_conn(
             cli=src_cli,
             root=src_root,
             path=srcpath,
+            pool=src_pools[srcpath[0]],
             dataset=src_datasets.path_to_dataset[srcpath],
             snaps=srcpath_to_snaps[srcpath]
         )
@@ -104,13 +116,14 @@ def push_conn(
             conn=dst_conn,
             cli=dest_cli,
             root=dest_root,
+            pool=dest_pool,
             path=destpath,
             dataset=dest_datasets.path_to_dataset[destpath] if destpath not in missing_dest_paths else NOT_SET,
             snaps=destpath_to_snaps[destpath] if destpath not in missing_dest_paths else NOT_SET
         )
         try:
             log.info(_s(1) + f"Checking dataset: ~{f'/{relpath}' if relpath else ''}")
-            replicate(source, dest, relpath=relpath, rollback=rollback, allow_init=allow_initialize, log_indent=2)
+            replicate(source, dest, relpath=relpath, rollback=rollback, allow_init=allow_init, log_indent=2)
         except ReplicationError as e:
             is_error = True
             log.error(space(e.log_indent) + str(e))

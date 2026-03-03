@@ -85,7 +85,7 @@ class ConnSpec:
 
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=True)
 class DatasetSpec:
     conn: ConnSpec
     dataset: Path

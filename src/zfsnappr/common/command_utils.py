@@ -9,7 +9,7 @@ from zfsnappr.common.args import CommonArgs
 from zfsnappr.common.sort import sortkey_snap_by_time
 from zfsnappr.common.zfs import ZfsCli, PeerInfo, PeerField, Dataset, Snapshot
 from zfsnappr.common.path import Path
-from zfsnappr.common.utils import combine_dicts, group_by
+from zfsnappr.common.utils import combine_dicts, group_by, space
 from zfsnappr.common.resolve_datasets import ResolvedDatasets, resolve_dataset_specs
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg
 from zfsnappr.common.replication.utils import parse_holdtags, ReplicationHold
@@ -86,16 +86,7 @@ def _set_peerinfo_slot(
     slot: int
 ):
     """Serializes the peer and stores it at the given slot on the dataset."""
-    field_values: dict[PeerField, str] = {
-        PeerField.GUID: str(peer.guid),
-        PeerField.PATH: str(peer.path),
-        PeerField.HOST: peer.host.serialize(),
-        PeerField.LAST_USED: str(int(peer.last_used.timestamp()))
-    }
-    value = ';'.join(f'{f}={v}' for f, v in field_values.items())
-    prop = f"zfsnappr:peer:{slot}"
-
-    cli.set_property(dataset.path, prop, value)
+    cli.set_property(dataset.path, f"zfsnappr:peer:{slot}", peer.serialize())
     dataset.peerinfos[slot] = peer
 
 
@@ -166,14 +157,18 @@ def remove_peer(
     cli: ZfsCli,
     dataset: Dataset,
     peer_guid: int,
-    holds: dict[Snapshot, set[str]]
+    holds: dict[Snapshot, set[str]],
+    log_indent: int = 0
 ):
     """Removes both PeerInfo and holds of peer with given GUID."""
+    def _s(i: int = 0):
+        return space(log_indent+i)
+
     r = next(((slot, p) for slot, p in dataset.peerinfos.items() if p and p.guid == peer_guid), None)
     if r is None:
         raise KeyError()
     slot, peer = r
-    print(f"Removing peer: {peer.host}::{peer.path}")
+    # log.info(_s() + f"Dataset {dataset.path}: removing peer {peer.host}::{peer.path}")
 
     # Clear slot
     _clear_peerinfo_slot(cli=cli, dataset=dataset, slot=slot)
@@ -185,9 +180,9 @@ def remove_peer(
             if h.guid == peer_guid:
                 relevant_holds.setdefault(h, set()).add(snap)
 
-    log.info(f"Removing {len(relevant_holds)} obsolete holds")
+    # log.info(_s() + f"Removing {len(relevant_holds)} obsolete holds")
     for i, (hold, snaps) in enumerate(relevant_holds.items()):
         cli.release_hold([s.longname for s in snaps], hold.to_tag())
         for s in snaps:
             s.holds -= 1
-        log.info(f"{i+1}/{len(relevant_holds)} removed")
+        # log.info(_s(1) + f"{i+1}/{len(relevant_holds)} removed")
