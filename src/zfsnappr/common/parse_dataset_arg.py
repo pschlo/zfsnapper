@@ -4,7 +4,7 @@ import platform
 from .path import Path
 
 
-LOCALHOST = "_local"
+LOCALHOST = "local"
 
 
 @dataclass(frozen=True, eq=True)
@@ -65,7 +65,8 @@ class ConnSpec:
         else:
             host, port = None, None
 
-        if host == LOCALHOST:
+        if host == LOCALHOST and port is None and user is None:
+            # Equivalent to omitted host, i.e. local system
             host = None
 
         # Validate
