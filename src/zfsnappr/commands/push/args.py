@@ -13,6 +13,6 @@ class Args(CommonArgs):
 
 
 def setup(parser: ArgumentParser) -> None:
-    parser.add_argument('dest', metavar='USER@HOST:PORT/DATASET')
+    parser.add_argument('dest', metavar='USER@HOST:PORT::DATASET')
     parser.add_argument('--init', action='store_true')
     parser.add_argument('--rollback', action='store_true')

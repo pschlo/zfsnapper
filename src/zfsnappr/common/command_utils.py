@@ -173,7 +173,7 @@ def remove_peer(
     if r is None:
         raise KeyError()
     slot, peer = r
-    print(f"Removing peer: {peer.host}/{peer.path}")
+    print(f"Removing peer: {peer.host}::{peer.path}")
 
     # Clear slot
     _clear_peerinfo_slot(cli=cli, dataset=dataset, slot=slot)

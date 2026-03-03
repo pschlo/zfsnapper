@@ -74,7 +74,7 @@ def sync_peer_conn(conn: ConnSpec, cli: ZfsCli, datasets: ResolvedDatasets, peer
     for guid, _datasets in obsolete_peers.items():
         for ds, peer in _datasets:
             remove_peer(cli=cli, dataset=ds, peer_guid=guid, holds=holds)
-            print(f"Removed peer {peer.host}/{peer.path} on dataset {ds.path}")
+            print(f"Removed peer {peer.host}::{peer.path} on dataset {ds.path}")
 
 
 def prune_unused_peers():

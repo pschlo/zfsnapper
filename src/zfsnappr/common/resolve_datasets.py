@@ -103,7 +103,7 @@ def resolve_dataset_specs(
         _kept_paths = resolved_datasets.p.matched
         if diff := _inc_exact - _kept_paths:
             ds = next(iter(diff))
-            raise ValueError(f"Dataset '{conn}/{ds}' is no longer included in resolved datasets")
+            raise ValueError(f"Dataset '{conn}::{ds}' is no longer included in resolved datasets")
 
         datasets[conn] = resolved_datasets
 

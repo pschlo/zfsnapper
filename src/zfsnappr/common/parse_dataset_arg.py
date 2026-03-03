@@ -109,14 +109,14 @@ def parse_dataset_arg(arg: str) -> DatasetSpec:
     """Returned dataset path may be empty path."""
     dataset: str
 
-    # value = conn/dataset
+    # value = conn::dataset
     # conn = user@hostport
     # hostport = host:port
-    # --> value_resolved = user@host:port/dataset
+    # --> value_resolved = user@host:port::dataset
 
     # Split dataset path from domain/netloc.
     # Dataset may be empty string.
-    _parts = arg.split('/', maxsplit=1)
+    _parts = arg.rsplit('::', maxsplit=1)
     if len(_parts) == 1:
         _conn, dataset = _parts[0], ""
     elif len(_parts) == 2:
