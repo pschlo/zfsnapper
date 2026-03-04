@@ -4,7 +4,8 @@ import platform
 from .path import Path
 
 
-LOCALHOST = "local"
+LOCAL_NODE_TOKEN = "local"
+LOCAL_NODE_NAME = platform.node()
 
 
 @dataclass(frozen=True, eq=True)
@@ -14,19 +15,11 @@ class ConnSpec:
     port: int | None
 
     def __str__(self) -> str:
-        if self.host is None:
-            return f"{platform.node()}"
-
-        res = self.host
-        if self.user:
-            res = f"{self.user}@{res}"
-        if self.port:
-            res = f"{res}:{self.port}"
-        return res
+        return self.serialize()
 
     def serialize(self) -> str:
         if self.host is None:
-            return f"{LOCALHOST}"
+            return f"{LOCAL_NODE_NAME}"
 
         res = self.host
         if self.user:
@@ -65,7 +58,7 @@ class ConnSpec:
         else:
             host, port = None, None
 
-        if host == LOCALHOST and port is None and user is None:
+        if host == LOCAL_NODE_TOKEN and port is None and user is None:
             # Equivalent to omitted host, i.e. local system
             host = None
 
