@@ -161,4 +161,5 @@ def remove_peer(
         cli.release_hold([s.longname for s in snaps], hold.to_tag())
         for s in snaps:
             s.holds -= 1
+            holds[s].remove(hold.to_tag())
         log.debug(_s(1) + f"{i+1}/{len(remove_holds)} removed")
