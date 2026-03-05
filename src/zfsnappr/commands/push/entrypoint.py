@@ -5,6 +5,7 @@ from zfsnappr.common.replication import ReplicationError
 from zfsnappr.common.resolve_datasets import ResolvedDatasets, create_zfs_cli, resolve_conn_datasets
 from zfsnappr.common.command_utils import resolve_dataset_args, fetch_snaps
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg, ConnSpec
+from zfsnappr.common.sort import sortkey_dataset
 from zfsnappr.common.path import Path
 from zfsnappr.common.zfs import ZfsCli, Pool
 from zfsnappr.common.utils import group_by, space
@@ -74,7 +75,7 @@ def push_conn(
     # Create matching of source dataset to dest dataset
     srcpath_to_destpath = {
         src_path: dest_root / src_path.relative_to(src_root)
-        for src_path in sorted(src_datasets.p.matched, key=lambda p: p.depth)
+        for src_path in sorted(src_datasets.p.matched, key=sortkey_dataset)
     }
 
     # Determine corresponding dest datasets

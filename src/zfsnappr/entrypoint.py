@@ -15,8 +15,8 @@ from .commands import (
   list as _list,
   tag as _tag,
   unhold as _unhold,
-  prune_peers as _prune_peers,
-  version as _version
+  version as _version,
+  peer as _peer
 )
 
 log = logging.getLogger(__name__)
@@ -49,8 +49,8 @@ def _entrypoint():
             _tag.entrypoint(cast(_tag.Args, args))
         case 'unhold':
             _unhold.entrypoint(cast(_unhold.Args, args))
-        case 'prune-peers':
-            _prune_peers.entrypoint(cast(_prune_peers.Args, args))
+        case 'peer':
+            _peer.entrypoint(cast(_peer.Args, args))
         case 'version':
             _version.entrypoint(cast(_version.Args, args))
         case _:

@@ -26,7 +26,7 @@ class Path(tuple[str, ...]):
         return "/".join(self)
 
     def __repr__(self) -> str:
-        return f"Path{tuple(self)!r}"
+        return f"Path('{str(self)}')"
 
     @overload
     def __getitem__(self, key: SupportsIndex) -> str: ...

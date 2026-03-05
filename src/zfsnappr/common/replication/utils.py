@@ -1,4 +1,4 @@
-from collections.abc import Collection
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -39,7 +39,7 @@ class ReplicationHold:
                 assert False
 
 
-def parse_holdtags(tags: Collection[str]) -> list[ReplicationHold]:
+def parse_holdtags(tags: Iterable[str]) -> list[ReplicationHold]:
     res: list[ReplicationHold] = []
     for tag in tags:
         try:
