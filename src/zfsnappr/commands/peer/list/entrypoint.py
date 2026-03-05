@@ -5,10 +5,11 @@ from collections.abc import Collection
 
 from zfsnappr.common.zfs import ZfsProperty, ZfsCli, Dataset, Snapshot
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
-from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_holds, parse_holdtags, Path, group_by, PeerInfo, ReplicationHold
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_holds, parse_holdtags, Path, group_by, PeerInfo, ReplicationHold, get_peerinfo
 from zfsnappr.common.filter import SnapFilter
 from zfsnappr.common.parse_dataset_arg import ConnSpec
 from zfsnappr.common.sort import sortkey_dataset
+from zfsnappr.common.utils import sort_dict
 from zfsnappr.common.render_table import render_table, Field
 
 
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+Field = Field[Dataset, int]
+
 
 def entrypoint(args: Args):
     """
@@ -25,7 +28,13 @@ def entrypoint(args: Args):
     """
     resolved = resolve_dataset_args(args)
 
+    _first = True
     for conn, (datasets, cli) in resolved.items():
+        if not _first:
+            log.info("")
+        _first = False
+
+        log.info(f"[{conn}] Scanning peers on {len(datasets.matched)} datasets")
         list_conn(
             conn=conn,
             datasets=datasets,
@@ -34,44 +43,40 @@ def entrypoint(args: Args):
 
 
 def list_conn(conn: ConnSpec, datasets: ResolvedDatasets, cli: ZfsCli):
-    # Collect all peers
-    peers = {p for ds in datasets.matched for p in ds.peerinfos if p}
-    peers = sorted(peers, key=lambda p: sortkey_dataset(p.path))
     snaps = fetch_snaps(cli=cli, datasets=datasets)
     holds = get_holds(cli, snaps)
 
+    if not snaps:
+        log.info(f"No matching snapshots")
+        return
 
-    dsets = sorted(datasets.matched, key=sortkey_dataset)
-    dset_to_snaps = group_by(snaps, key=lambda s: s.dataset, ensure_keys=[d.path for d in dsets])
-    dset_to_holds = {
-        dset.path: parse_holdtags(h for s in dset_to_snaps[dset.path] for h in holds[s])
-        for dset in dsets
+    _ds_to_snaps = group_by(snaps, key=lambda s: s.dataset, ensure_keys=datasets.p.matched)
+    _ds_to_holds = {
+        dset: parse_holdtags(h for s in _ds_to_snaps[dset.path] for h in holds[s])
+        for dset in datasets.matched
     }
 
-    def datasets_with_peer(guid: int):
-        return [
-            (d, p)
-            for d in dsets for p in d.peerinfos
-            if p and p.guid == guid
-        ]
+    ds_peer_to_holds: dict[tuple[Path, int], set[ReplicationHold]] = {}
+    for dset, holds in _ds_to_holds.items():
+        for h in holds:
+            ds_peer_to_holds.setdefault((dset.path, h.guid), set()).add(h)
 
+    # Registered GUIDs PLUS those on holds
+    ds_to_peers: dict[Dataset, set[int]] = {}
+    for ds, _holds in _ds_to_holds.items():
+        ds_to_peers[ds] = {
+            *(h.guid for h in _holds),
+            *(p.guid for p in ds.peerinfos if p)
+        }
 
     fields = [
-        Field("PEER HOST", lambda peer: str(peer.host)),
-        Field("PEER PATH", lambda peer: str(peer.path)),
-        Field("USED BY DATASETS", lambda peer: str(
-            "\n".join([
-                str(d.path)
-                for d, p in datasets_with_peer(peer.guid)
-            ])
-        )),
-        Field("HOLDS", lambda peer: "\n".join([
-            str(len([h for h in dset_to_holds[d.path] if h.guid == peer.guid]))
-            for d, p in datasets_with_peer(peer.guid)
-        ])),
-        Field("LAST USED", lambda peer: str(peer.last_used))
+        Field("PATH", lambda d, p: str(d.path)),
+        Field("PEER HOST", lambda d, peer: str(p.host) if (p := get_peerinfo(d, peer)) else "?"),
+        Field("PEER PATH", lambda d, peer: str(p.path) if (p := get_peerinfo(d, peer)) else "?"),
+        Field("HOLDS", lambda d, peer:
+            str(len(ds_peer_to_holds.get((d.path, peer), [])))
+        ),
+        Field("LAST USED", lambda d, peer: str(p.last_used) if (p := get_peerinfo(d, peer)) else "?")
     ]
+    peers = [(d, p) for d, ps in sort_dict(ds_to_peers, key=sortkey_dataset).items() for p in ps]
     render_table(fields, peers)
-    # for peer in peers:
-    #     print(peer)
-    #     # print(s for s in snaps if s.)

@@ -15,6 +15,8 @@ from zfsnappr.common.render_table import render_table, Field
 
 log = logging.getLogger(__name__)
 
+Field = Field[Snapshot]
+
 
 def entrypoint(args: Args) -> None:
     resolved = resolve_dataset_args(args)
@@ -45,7 +47,7 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, exten
         log.info(f"No matching snapshots")
         return
 
-    fields: list[Field] = [
+    fields = [
         Field('DATASET',    lambda s: str(s.dataset)),
         Field('SHORT NAME', lambda s: s.shortname),
         Field('TAGS',       lambda s: ','.join(sorted(s.tags)) if s.tags is not None else 'UNSET'),
@@ -57,7 +59,7 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, exten
         fields += [Field('HOLDS', lambda s: '+' if holdtags[s] else '')]
     fields += [Field('PEERS', lambda s: "\n".join(sorted(format_snap_peers(s, datasets, holdtags))))]
 
-    render_table(fields, snaps)
+    render_table(fields, [(s,) for s in snaps])
 
 
 def format_snap_peers(snapshot: Snapshot, datasets: ResolvedDatasets, holdtags: Mapping[Snapshot, Collection[str]]) -> list[str]:

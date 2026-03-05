@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import Optional, Callable, cast
+from typing import Optional, Callable, cast, Unpack, TypeVarTuple
+from collections.abc import Collection
 from dataclasses import dataclass
 import logging
 
@@ -12,21 +13,24 @@ log = logging.getLogger(__name__)
 COLUMN_SEPARATOR = ' | '
 HEADER_SEPARATOR = '-'
 
+Ts = TypeVarTuple("Ts")
+
+
 @dataclass
-class Field:
+class Field[*Ts]:
     name: str
-    get: Callable[[Snapshot], str]
+    get: Callable[[Unpack[Ts]], str]
     # whether to blank this column on wrapped lines
     blank_on_wrap: bool = False
 
 
-def render_table(fields: list[Field], snaps: list[Snapshot]) -> None:
+def render_table[*Ts](fields: list[Field[*Ts]], data: Collection[tuple[*Ts]]) -> None:
     headers = [f.name for f in fields]
 
     # rows_blocks[row][col] = list of lines
     rows_blocks: list[list[list[str]]] = [
-        [cell_lines(f.get(snap)) for f in fields]
-        for snap in snaps
+        [cell_lines(f.get(*snap)) for f in fields]
+        for snap in data
     ]
 
     # widths from the max visible line length in each column (including header)

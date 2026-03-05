@@ -9,6 +9,7 @@ from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, rem
 from zfsnappr.common.resolve_datasets import resolve_dataset_specs, combine_dicts
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg
 from zfsnappr.common.parse_dataset_arg import ConnSpec, DatasetSpec, Path
+from zfsnappr.common.sort import sortkey_dataset
 from zfsnappr.common.utils import group_by, space
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
 from zfsnappr.common.parse_duration import parse_duration
@@ -72,7 +73,7 @@ def entrypoint(args: Args) -> None:
             log.info("")
         _first = False
 
-        log.info(f"[{conn}] Syncing peers")
+        log.info(f"[{conn}] Pruning peers")
         sync_peer_conn(
             conn=conn,
             cli=cli,
@@ -156,7 +157,7 @@ def sync_peer_conn(
         return
 
     log.info(_s() + f"Found {len(remove_peers)} peers to remove:")
-    for ds, peer in remove_peers:
+    for ds, peer in sorted(remove_peers, key=lambda t: sortkey_dataset(t[0])):
         log.info(_s(1) + f"Peer {peer.host}::{peer.path} on dataset {ds.path}")
 
     if dry_run:

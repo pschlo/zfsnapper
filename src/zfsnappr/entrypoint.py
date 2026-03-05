@@ -27,7 +27,7 @@ def cli():
         _entrypoint()
     except Exception as e:
         log.error(e)
-        # raise
+        raise
         sys.exit(1)
 
 
