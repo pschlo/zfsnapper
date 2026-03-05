@@ -51,21 +51,30 @@ def list_conn(conn: ConnSpec, datasets: ResolvedDatasets, cli: ZfsCli):
         return
 
     _ds_to_snaps = group_by(snaps, key=lambda s: s.dataset, ensure_keys=datasets.p.matched)
-    _ds_to_holds = {
-        dset: parse_holdtags(h for s in _ds_to_snaps[dset.path] for h in holds[s])
-        for dset in datasets.matched
-    }
 
-    ds_peer_to_holds: dict[tuple[Path, int], set[ReplicationHold]] = {}
-    for dset, holds in _ds_to_holds.items():
-        for h in holds:
-            ds_peer_to_holds.setdefault((dset.path, h.guid), set()).add(h)
+    _ds_to_holds: dict[
+        Dataset,
+        set[tuple[Snapshot, ReplicationHold]]
+    ] = {}
+    for dset in datasets.matched:
+        _holds: set[tuple[Snapshot, ReplicationHold]] = set()
+        for s in _ds_to_snaps[dset.path]:
+            _holds.update((s, h) for h in parse_holdtags(holds[s]))
+        _ds_to_holds[dset] = _holds
+
+    ds_peer_to_holds: dict[
+        tuple[Path, int],
+        set[tuple[Snapshot, ReplicationHold]]
+    ] = {}
+    for ds, _holds in _ds_to_holds.items():
+        for snap, h in _holds:
+            ds_peer_to_holds.setdefault((ds.path, h.guid), set()).add((snap, h))
 
     # Registered GUIDs PLUS those on holds
     ds_to_peers: dict[Dataset, set[int]] = {}
     for ds, _holds in _ds_to_holds.items():
         ds_to_peers[ds] = {
-            *(h.guid for h in _holds),
+            *(h.guid for _, h in _holds),
             *(p.guid for p in ds.peerinfos if p)
         }
 
