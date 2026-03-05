@@ -37,17 +37,22 @@ def entrypoint(args: Args) -> None:
         _first = False
 
         log.info(f"[{conn}] Scanning snapshots on {len(datasets.matched)} datasets")
-        list_conn(cli=cli, datasets=datasets, filter=filter, extend_holds=args.holds)
+        list_conn(cli=cli, datasets=datasets, filter=filter, extend_holds=args.show_holds, held_only=args.held_only)
 
 
-def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, extend_holds: bool):
+def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, extend_holds: bool, held_only: bool):
     snaps = fetch_snaps(cli, datasets, filter=filter)
-    if not snaps:
-        log.info(f"No matching snapshots")
-        return
 
     # get hold tags for all snapshots with holds
     holdtags = get_holds(cli, snaps)
+
+    # Optionally filter snaps
+    if held_only:
+        snaps = [s for s in snaps if holdtags[s]]
+
+    if not snaps:
+        log.info(f"No matching snapshots")
+        return
 
     fields: list[Field] = [
         Field('DATASET',    lambda s: str(s.dataset)),
@@ -59,16 +64,16 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, exten
         fields += [Field('HOLDS', lambda s: "\n".join(sorted(holdtags[s])))]
     else:
         fields += [Field('HOLDS', lambda s: '+' if holdtags[s] else '')]
-    fields += [Field('PEERS', lambda s: "\n".join(sorted(get_snap_peers(s, datasets, holdtags))))]
+    fields += [Field('PEERS', lambda s: "\n".join(sorted(format_snap_peers(s, datasets, holdtags))))]
 
     render_table(fields, snaps)
 
 
-def get_snap_peers(snapshot: Snapshot, datasets: ResolvedDatasets, holdtags: Mapping[Snapshot, Collection[str]]) -> set[str]:
+def format_snap_peers(snapshot: Snapshot, datasets: ResolvedDatasets, holdtags: Mapping[Snapshot, Collection[str]]) -> list[str]:
     dataset = datasets.path_to_dataset[snapshot.dataset]
     tags = holdtags[snapshot]
     peers = {(hold.direction, get_peerinfo(dataset, hold.guid)) for hold in parse_holdtags(tags)}
-    return {format_peerinfo(dir, p) for dir, p in peers}
+    return [format_peerinfo(dir, p) for dir, p in peers]
 
 def format_peerinfo(direction: Direction, peer: PeerInfo | None):
     match direction:

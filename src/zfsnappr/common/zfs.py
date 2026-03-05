@@ -215,7 +215,7 @@ class Dataset:
     path: Path
     guid: int
     type: ZfsDatasetType
-    peerinfos: dict[int, PeerInfo | None]
+    peerinfos: list[PeerInfo | None]
 
     def __repr__(self) -> str:
         return f"Dataset({self.path})"
@@ -234,7 +234,7 @@ class Dataset:
         type = ZfsDatasetType(ps[P.TYPE].value)
 
         # Parse peer slots
-        peer_slots: dict[int, PeerInfo | None] = {}
+        peer_slots_dict: dict[int, PeerInfo | None] = {}
         for propkey, prop in ps.items():
             parts = propkey.split(':')
             if parts[:2] != ['zfsnappr', 'peer']:
@@ -244,7 +244,7 @@ class Dataset:
             # Ignore inherited peer slots
             if prop == '-' or prop.source != PropertySource.LOCAL:
                 # Slot is empty
-                peer_slots[slot] = None
+                peer_slots_dict[slot] = None
                 continue
 
             # Slot is nonempty
@@ -252,11 +252,16 @@ class Dataset:
             for field in prop.value.split(';'):
                 f, v = field.split('=', maxsplit=1)
                 fields[f] = v
-            peer_slots[slot] = PeerInfo.from_fields(fields)
+            peer_slots_dict[slot] = PeerInfo.from_fields(fields)
+        
+        # Convert peer slots to list.
+        # Raises KeyError if slots are not contiguous.
+        max_slot = max(peer_slots_dict.keys())
+        peer_slots = [peer_slots_dict[i] for i in range(max_slot+1)]
 
         # Assert no peer GUID is duplicated
         _guids: set[int] = set()
-        for p in peer_slots.values():
+        for p in peer_slots:
             if p is None:
                 continue
             if p.guid in _guids:

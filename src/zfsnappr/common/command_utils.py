@@ -106,16 +106,16 @@ def update_peerinfo(
 ):
     """Update peer if it already exists, else add under first free slot."""
     # Find peer GUID
-    curr_slot = next((slot for slot, p in dataset.peerinfos.items() if p is not None and p.guid == peer.guid), None)
+    curr_slot = next((slot for slot, p in enumerate(dataset.peerinfos) if p is not None and p.guid == peer.guid), None)
     if curr_slot is not None:
         # Peer already exists in slot; overwrite
         _set_peerinfo_slot(cli=cli, dataset=dataset, peer=peer, slot=curr_slot)
         return
 
     # Find first free slot
-    slot = next((slot for slot, p in dataset.peerinfos.items() if p is None), None)
+    slot = next((slot for slot, p in enumerate(dataset.peerinfos) if p is None), None)
     if slot is None:
-        raise RuntimeError(f"Cannot set peer on dataset {dataset.path}: No free slots")
+        raise RuntimeError(f"Cannot set peer on dataset {dataset.path}: no free slots")
     _set_peerinfo_slot(cli=cli, dataset=dataset, peer=peer, slot=slot)
 
 
@@ -123,7 +123,7 @@ def get_peerinfo(
     dataset: Dataset,
     guid: int
 ) -> PeerInfo | None:
-    return next((p for slot, p in dataset.peerinfos.items() if p is not None and p.guid == guid), None)
+    return next((p for slot, p in enumerate(dataset.peerinfos) if p is not None and p.guid == guid), None)
 
 
 def remove_peer(
@@ -139,7 +139,7 @@ def remove_peer(
     def _s(i: int = 0):
         return space(log_indent+i)
 
-    r = next(((slot, p) for slot, p in dataset.peerinfos.items() if p and p.guid == peer_guid), None)
+    r = next(((slot, p) for slot, p in enumerate(dataset.peerinfos) if p and p.guid == peer_guid), None)
     if r is None:
         raise KeyError()
     slot, peer = r

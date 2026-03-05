@@ -5,7 +5,7 @@ from datetime import datetime
 
 from .args import Args
 from zfsnappr.common.zfs import ZfsCli, PeerInfo, Dataset, Pool
-from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, remove_peer, get_holds
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, remove_peer, get_holds, parse_holdtags
 from zfsnappr.common.resolve_datasets import resolve_dataset_specs, combine_dicts
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg
 from zfsnappr.common.parse_dataset_arg import ConnSpec, DatasetSpec, Path
@@ -66,7 +66,7 @@ def entrypoint(args: Args) -> None:
             if (conn, poolname) in sync_poolnames:
                 sync_pools_guids[(conn, pools[poolname])] = {ds.guid for ds in _datasets}
 
-    # For each dataset, get all snapshots non-recursively
+
     _first = True
     for conn, (datasets, cli) in resolved.items():
         if not _first:
@@ -82,7 +82,8 @@ def entrypoint(args: Args) -> None:
             sync_conns_guids=sync_conns_guids,
             sync_pools_guids=sync_pools_guids,
             dry_run=args.dry_run,
-            remove_older_than=parse_duration(args.unused_for) if args.unused_for is not None else None
+            remove_older_than=parse_duration(args.unused_for) if args.unused_for is not None else None,
+            remove_without_holds=args.without_holds
         )
 
 
@@ -94,7 +95,8 @@ def sync_peer_conn(
     sync_conns_guids: dict[ConnSpec, set[int]],
     sync_pools_guids: dict[tuple[ConnSpec, Pool], set[int]],
     dry_run: bool,
-    remove_older_than: relativedelta | None
+    remove_older_than: relativedelta | None,
+    remove_without_holds: bool
 ):
     """
     - Check existing GUIDs on dest
@@ -104,9 +106,18 @@ def sync_peer_conn(
     def _s(i: int = 0):
         return space(i+1)
 
+    snaps = fetch_snaps(cli, datasets)
+    holds = get_holds(cli, snaps)
+
+    # Determine peer GUIDs that have held snapshots
+    peers_with_holds: set[tuple[Path, int]] = set()
+    for snap, _holds in holds.items():
+        for h in parse_holdtags(_holds):
+            peers_with_holds.add((snap.dataset, h.guid))
+
     now = datetime.now()
 
-    def should_remove(p: PeerInfo) -> bool:
+    def should_remove(ds: Dataset, p: PeerInfo) -> bool:
         # Check prune_exact
         if DatasetSpec(p.host, p.path) in prune_exact:
             return True
@@ -124,6 +135,10 @@ def sync_peer_conn(
         # Check last used
         if remove_older_than is not None and p.last_used < now - remove_older_than:
             return True
+        
+        # Check if no holds
+        if remove_without_holds and (ds.path, p.guid) not in peers_with_holds:
+            return True
 
         return False
 
@@ -131,10 +146,10 @@ def sync_peer_conn(
     # E.g. a peer may be kept on one dataset but removed from another.
     remove_peers: set[tuple[Dataset, PeerInfo]] = set()
     for ds in datasets.matched:
-        for p in ds.peerinfos.values():
+        for p in ds.peerinfos:
             if p is None:
                 continue
-            if should_remove(p):
+            if should_remove(ds, p):
                 remove_peers.add((ds, p))
 
     if not remove_peers:
@@ -150,8 +165,6 @@ def sync_peer_conn(
         return
 
     log.info(_s() + f"Removing peers")
-    snaps = fetch_snaps(cli, datasets)
-    holds = get_holds(cli, snaps)
     for i, (ds, peer) in enumerate(remove_peers):
         remove_peer(cli=cli, dataset=ds, peer_guid=peer.guid, holds=holds, log_indent=2)
         log.info(_s(1) + f"{i+1}/{len(remove_peers)} removed")
