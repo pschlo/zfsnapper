@@ -1,16 +1,9 @@
 from __future__ import annotations
-from typing import cast, Optional, TYPE_CHECKING
-import logging
 from collections.abc import Collection
 
-from zfsnappr.common.zfs import ZfsProperty, ZfsCli, Dataset, Snapshot
+from zfsnappr.common.zfs import Dataset, Snapshot
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
-from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_holds, parse_holdtags, Path, group_by, PeerInfo, ReplicationHold, get_peerinfo
-from zfsnappr.common.filter import SnapFilter
-from zfsnappr.common.parse_dataset_arg import ConnSpec
-from zfsnappr.common.sort import sortkey_dataset
-from zfsnappr.common.utils import sort_dict
-from zfsnappr.common.render_table import render_table, Field
+from zfsnappr.common.command_utils import parse_holdtags, Path, group_by, ReplicationHold
 
 
 def get_peers(snaps: Collection[Snapshot], holds: dict[Snapshot, set[str]], datasets: ResolvedDatasets):

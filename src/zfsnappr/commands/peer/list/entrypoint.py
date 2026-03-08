@@ -3,10 +3,9 @@ from typing import cast, Optional, TYPE_CHECKING
 import logging
 from collections.abc import Collection
 
-from zfsnappr.common.zfs import ZfsProperty, ZfsCli, Dataset, Snapshot
+from zfsnappr.common.zfs import ZfsCli, Dataset
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
-from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_holds, parse_holdtags, Path, group_by, PeerInfo, ReplicationHold, get_peerinfo
-from zfsnappr.common.filter import SnapFilter
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, get_holds, get_peerinfo
 from zfsnappr.common.parse_dataset_arg import ConnSpec
 from zfsnappr.common.sort import sortkey_dataset
 from zfsnappr.common.utils import sort_dict

@@ -14,13 +14,13 @@ class Args(CommonArgs):
     peer_command: str
 
 
-def setup(parser: ArgumentParser) -> None:
+def setup(parser: ArgumentParser, common: ArgumentParser) -> None:
     subparsers = parser.add_subparsers(dest="peer_command")
 
     _list.args.setup(
-        subparsers.add_parser("list")
+        subparsers.add_parser("list", parents=[common])
     )
 
     _prune.args.setup(
-        subparsers.add_parser("prune")
+        subparsers.add_parser("prune", parents=[common])
     )

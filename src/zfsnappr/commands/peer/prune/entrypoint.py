@@ -4,8 +4,8 @@ from dateutil.relativedelta import relativedelta
 from datetime import datetime
 
 from .args import Args
-from zfsnappr.common.zfs import ZfsCli, PeerInfo, Dataset, Pool
-from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, remove_peer, get_holds, parse_holdtags, get_peerinfo
+from zfsnappr.common.zfs import ZfsCli, Dataset, Pool
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, remove_peer, get_holds, get_peerinfo
 from zfsnappr.common.resolve_datasets import resolve_dataset_specs, combine_dicts
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg
 from zfsnappr.common.parse_dataset_arg import ConnSpec, DatasetSpec, Path

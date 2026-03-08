@@ -53,7 +53,8 @@ def get_args() -> Args:
         subparsers.add_parser('unhold', parents=[common])
     )
     _peer.args.setup(
-        subparsers.add_parser('peer', parents=[common])
+        subparsers.add_parser('peer'),
+        common=common
     )
     _version.args.setup(
         subparsers.add_parser('version')
