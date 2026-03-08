@@ -12,6 +12,8 @@ from zfsnappr.common.sort import sortkey_dataset
 from zfsnappr.common.utils import sort_dict
 from zfsnappr.common.render_table import render_table, Field
 
+from ..common.get_peers import get_peers
+
 
 if TYPE_CHECKING:
     from .args import Args
@@ -46,44 +48,18 @@ def list_conn(conn: ConnSpec, datasets: ResolvedDatasets, cli: ZfsCli):
     snaps = fetch_snaps(cli=cli, datasets=datasets)
     holds = get_holds(cli, snaps)
 
+    ds_to_peers, ds_peer_to_holds = get_peers(snaps, holds, datasets)
+
     if not snaps:
         log.info(f"No matching snapshots")
         return
-
-    _ds_to_snaps = group_by(snaps, key=lambda s: s.dataset, ensure_keys=datasets.p.matched)
-
-    _ds_to_holds: dict[
-        Dataset,
-        set[tuple[Snapshot, ReplicationHold]]
-    ] = {}
-    for dset in datasets.matched:
-        _holds: set[tuple[Snapshot, ReplicationHold]] = set()
-        for s in _ds_to_snaps[dset.path]:
-            _holds.update((s, h) for h in parse_holdtags(holds[s]))
-        _ds_to_holds[dset] = _holds
-
-    ds_peer_to_holds: dict[
-        tuple[Path, int],
-        set[tuple[Snapshot, ReplicationHold]]
-    ] = {}
-    for ds, _holds in _ds_to_holds.items():
-        for snap, h in _holds:
-            ds_peer_to_holds.setdefault((ds.path, h.guid), set()).add((snap, h))
-
-    # Registered GUIDs PLUS those on holds
-    ds_to_peers: dict[Dataset, set[int]] = {}
-    for ds, _holds in _ds_to_holds.items():
-        ds_to_peers[ds] = {
-            *(h.guid for _, h in _holds),
-            *(p.guid for p in ds.peerinfos if p)
-        }
 
     fields = [
         Field("PATH", lambda d, p: str(d.path)),
         Field("PEER HOST", lambda d, peer: str(p.host) if (p := get_peerinfo(d, peer)) else "?"),
         Field("PEER PATH", lambda d, peer: str(p.path) if (p := get_peerinfo(d, peer)) else "?"),
         Field("HOLDS", lambda d, peer:
-            str(len(ds_peer_to_holds.get((d.path, peer), [])))
+            str(len(ds_peer_to_holds[(d.path, peer)]))
         ),
         Field("LAST USED", lambda d, peer: str(p.last_used) if (p := get_peerinfo(d, peer)) else "?")
     ]

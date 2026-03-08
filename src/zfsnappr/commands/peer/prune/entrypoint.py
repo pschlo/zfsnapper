@@ -5,7 +5,7 @@ from datetime import datetime
 
 from .args import Args
 from zfsnappr.common.zfs import ZfsCli, PeerInfo, Dataset, Pool
-from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, remove_peer, get_holds, parse_holdtags
+from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, remove_peer, get_holds, parse_holdtags, get_peerinfo
 from zfsnappr.common.resolve_datasets import resolve_dataset_specs, combine_dicts
 from zfsnappr.common.parse_dataset_arg import parse_dataset_arg
 from zfsnappr.common.parse_dataset_arg import ConnSpec, DatasetSpec, Path
@@ -14,11 +14,23 @@ from zfsnappr.common.utils import group_by, space
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
 from zfsnappr.common.parse_duration import parse_duration
 
+from ..common.get_peers import get_peers
+
 
 log = logging.getLogger(__name__)
 
 
 def entrypoint(args: Args) -> None:
+    if not any([
+        args.peer,
+        args.from_,
+        args.unused_for,
+        args.unheld,
+        args.unknown
+    ]):
+        log.info(f"No prune policy specified, nothing to do")
+        return
+
     resolved = resolve_dataset_args(args)
 
     prune_exact: set[DatasetSpec] = set()
@@ -83,7 +95,8 @@ def entrypoint(args: Args) -> None:
             sync_pools_guids=sync_pools_guids,
             dry_run=args.dry_run,
             remove_older_than=parse_duration(args.unused_for) if args.unused_for is not None else None,
-            remove_without_holds=args.without_holds
+            remove_without_holds=args.unheld,
+            remove_unknown=args.unknown
         )
 
 
@@ -96,7 +109,8 @@ def sync_peer_conn(
     sync_pools_guids: dict[tuple[ConnSpec, Pool], set[int]],
     dry_run: bool,
     remove_older_than: relativedelta | None,
-    remove_without_holds: bool
+    remove_without_holds: bool,
+    remove_unknown: bool
 ):
     """
     - Check existing GUIDs on dest
@@ -108,16 +122,15 @@ def sync_peer_conn(
 
     snaps = fetch_snaps(cli, datasets)
     holds = get_holds(cli, snaps)
-
-    # Determine peer GUIDs that have held snapshots
-    peers_with_holds: set[tuple[Path, int]] = set()
-    for snap, _holds in holds.items():
-        for h in parse_holdtags(_holds):
-            peers_with_holds.add((snap.dataset, h.guid))
+    ds_to_peers, ds_peer_to_holds = get_peers(snaps, holds, datasets)
 
     now = datetime.now()
 
-    def should_remove(ds: Dataset, p: PeerInfo) -> bool:
+    def should_remove(ds: Dataset, peer_guid: int) -> bool:
+        p = get_peerinfo(ds, peer_guid)
+        if p is None:
+            return remove_unknown
+
         # Check prune_exact
         if DatasetSpec(p.host, p.path) in prune_exact:
             return True
@@ -131,26 +144,24 @@ def sync_peer_conn(
         for (peer_conn, peer_pool), peer_guids in sync_pools_guids.items():
             if p.pool_guid == peer_pool.guid and p.guid not in peer_guids:
                 return True
-            
+
         # Check last used
         if remove_older_than is not None and p.last_used < now - remove_older_than:
             return True
-        
+
         # Check if no holds
-        if remove_without_holds and (ds.path, p.guid) not in peers_with_holds:
+        if remove_without_holds and not ds_peer_to_holds[(ds.path, p.guid)]:
             return True
 
         return False
 
     # We don't remove a peer in general; we always remove a peer *from a dataset*.
     # E.g. a peer may be kept on one dataset but removed from another.
-    remove_peers: set[tuple[Dataset, PeerInfo]] = set()
-    for ds in datasets.matched:
-        for p in ds.peerinfos:
-            if p is None:
-                continue
-            if should_remove(ds, p):
-                remove_peers.add((ds, p))
+    remove_peers: set[tuple[Dataset, int]] = set()
+    for d, ps in ds_to_peers.items():
+        for p in ps:
+            if should_remove(d, p):
+                remove_peers.add((d, p))
 
     if not remove_peers:
         log.info(_s() + f"No peers to remove")
@@ -158,7 +169,10 @@ def sync_peer_conn(
 
     log.info(_s() + f"Found {len(remove_peers)} peers to remove:")
     for ds, peer in sorted(remove_peers, key=lambda t: sortkey_dataset(t[0])):
-        log.info(_s(1) + f"Peer {peer.host}::{peer.path} on dataset {ds.path}")
+        if p := get_peerinfo(ds, peer):
+            log.info(_s(1) + f"Peer {p.host}::{p.path} on dataset {ds.path}")
+        else:
+            log.info(_s(1) + f"Unknown peer on dataset {ds.path}")
 
     if dry_run:
         log.info(_s() + "Dry-run enabled, not removing any peers")
@@ -166,5 +180,5 @@ def sync_peer_conn(
 
     log.info(_s() + f"Removing peers")
     for i, (ds, peer) in enumerate(remove_peers):
-        remove_peer(cli=cli, dataset=ds, peer_guid=peer.guid, holds=holds, log_indent=2)
+        remove_peer(cli=cli, dataset=ds, peer_guid=peer, holds=holds, log_indent=2)
         log.info(_s(1) + f"{i+1}/{len(remove_peers)} removed")
