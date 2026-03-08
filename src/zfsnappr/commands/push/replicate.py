@@ -71,9 +71,9 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
 
         # Create holds
         source.cli.hold([source.base_snap.longname], source.holdtag)
-        source.base_snap.holds += 1
+        source.base_snap.num_holds += 1
         dest.cli.hold([dest.base_snap.longname], dest.holdtag)
-        dest.base_snap.holds += 1
+        dest.base_snap.num_holds += 1
 
     else:
         # Ensure sorting
@@ -185,13 +185,13 @@ def replicate_incrementally(source: DatasetSide, dest: DatasetSide, log_indent: 
 
         # Update holds
         source.cli.hold([snap.longname], source.holdtag)
-        snap.holds += 1
+        snap.num_holds += 1
         dest.cli.hold([dest_snap.longname], dest.holdtag)
-        dest_snap.holds += 1
+        dest_snap.num_holds += 1
         source.cli.release_hold([base.longname], source.holdtag)
-        base.holds -= 1
+        base.num_holds -= 1
         dest.cli.release_hold([dest_base.longname], dest.holdtag)
-        dest_base.holds -= 1
+        dest_base.num_holds -= 1
 
     dest.snaps = [s.with_dataset(dest.path) for s in reversed(transfer_sequence[1:])] + dest.snaps
 
@@ -270,11 +270,11 @@ def ensure_holds(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
     if source.holdtag not in holds[0][source.base_snap]:
         log.info(_s() + f"Creating hold for latest common snapshot '{source.base_snap.shortname}' on source")
         source.cli.hold([source.base_snap.longname], tag=source.holdtag)
-        source.base_snap.holds += 1
+        source.base_snap.num_holds += 1
     if dest.holdtag not in holds[1][dest.base_snap]:
         log.info(_s() + f"Creating hold for latest common snapshot '{dest.base_snap.shortname}' on destination")
         dest.cli.hold([dest.base_snap.longname], tag=dest.holdtag)
-        dest.base_snap.holds += 1
+        dest.base_snap.num_holds += 1
 
     # Remove all other holdtags
     release_snaps = (
@@ -331,8 +331,8 @@ def _release_holds(
 
     clis[0].release_hold([s.longname for s in release_snaps[0]], release_holdtags[0])
     for s in release_snaps[0]:
-        s.holds -= 1
+        s.num_holds -= 1
 
     clis[1].release_hold([s.longname for s in release_snaps[1]], release_holdtags[1])
     for s in release_snaps[1]:
-        s.holds -= 1
+        s.num_holds -= 1

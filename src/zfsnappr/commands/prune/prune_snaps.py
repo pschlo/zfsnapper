@@ -71,12 +71,18 @@ def prune_snapshots[G](
     log.info(space(1) + f'Destroying {len(total_destroy)} snapshots on {len({s.dataset for s in total_destroy})} datasets')
     _num_destroyed, _num_skipped = 0, 0
     for snap in total_destroy:
-        try:
-            cli.destroy_snapshots(snap.dataset, [snap.shortname])
-            _num_destroyed += 1
-        except CalledProcessError:
-            log.warning(space(2) + f"Failed to destroy snapshot: {snap.shortname}")
+        if snap.num_holds:
+            log.warning(space(2) + f"Cannot destroy snapshot with holds: {snap.shortname}")
             _num_skipped += 1
+
+        else:
+            try:
+                cli.destroy_snapshots(snap.dataset, [snap.shortname])
+                _num_destroyed += 1
+            except CalledProcessError:
+                log.warning(space(2) + f"Failed to destroy snapshot: {snap.shortname}")
+                _num_skipped += 1
+
         log.info(space(2) + f"{_num_destroyed}/{len(total_destroy)} destroyed ({_num_skipped} skipped)")
 
 

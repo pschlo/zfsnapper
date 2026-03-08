@@ -99,7 +99,7 @@ class Snapshot:
     guid: int
     timestamp: datetime
     tags: frozenset[str] | None
-    holds: int
+    num_holds: int
 
     properties: dict[str, str]
     """Properties as fetched from ZFS; may be outdated."""
@@ -116,7 +116,7 @@ class Snapshot:
         dataset = Path(dataset_name)
         guid = int(ps[P.GUID])
         timestamp = datetime.fromtimestamp(int(ps[P.CREATION]))
-        holds = int(ps[P.USERREFS])
+        num_holds = int(ps[P.USERREFS])
 
         if ps[P.CUSTOM_TAGS] == '-':
             tags = None
@@ -129,7 +129,7 @@ class Snapshot:
             guid=guid,
             timestamp=timestamp,
             tags=tags,
-            holds=holds,
+            num_holds=num_holds,
             properties=ps
         )
 
@@ -144,7 +144,7 @@ class Snapshot:
             guid=self.guid,
             timestamp=self.timestamp,
             tags=self.tags,
-            holds=self.holds,
+            num_holds=self.num_holds,
             properties=self.properties
         )
 
@@ -155,7 +155,7 @@ class Snapshot:
             guid=self.guid,
             timestamp=self.timestamp,
             tags=self.tags,
-            holds=self.holds,
+            num_holds=self.num_holds,
             properties=self.properties
         )
 

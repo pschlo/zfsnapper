@@ -30,6 +30,8 @@ class Args(CommonArgs):
     group_by: str
     keep_tag: list[str]
 
+    allow_destroy_all: bool
+
 
 COUNT_OPTS = [
     "--keep-last",
@@ -65,3 +67,5 @@ def setup(parser: ArgumentParser) -> None:
 
     # filter snapshots by name
     parser.add_argument('snapshot', nargs='*', type=str)
+
+    parser.add_argument('--allow-destroy-all', action='store_true')

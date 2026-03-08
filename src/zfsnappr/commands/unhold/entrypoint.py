@@ -32,7 +32,7 @@ def unhold_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, dry
     snaps = fetch_snaps(cli, datasets, filter=filter)
 
     # Get hold tags and filter
-    _all_holds = cli.get_holds([s.longname for s in snaps], userrefs={s.longname: s.holds for s in snaps})
+    _all_holds = cli.get_holds([s.longname for s in snaps], userrefs={s.longname: s.num_holds for s in snaps})
     release_holds = {h for h in _all_holds if h.tag.startswith('zfsnappr')}
 
     # Print result

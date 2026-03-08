@@ -75,7 +75,7 @@ def get_holds(
     cli: ZfsCli,
     snapshots: Collection[Snapshot]
 ) -> dict[Snapshot, set[str]]:
-    tags = cli.get_holdtags([s.longname for s in snapshots], userrefs={s.longname: s.holds for s in snapshots})
+    tags = cli.get_holdtags([s.longname for s in snapshots], userrefs={s.longname: s.num_holds for s in snapshots})
     return {s: tags[s.longname] for s in snapshots}
 
 
@@ -160,6 +160,6 @@ def remove_peer(
     for i, (hold, snaps) in enumerate(remove_holds.items()):
         cli.release_hold([s.longname for s in snaps], hold.to_tag())
         for s in snaps:
-            s.holds -= 1
+            s.num_holds -= 1
             holds[s].remove(hold.to_tag())
         log.debug(_s(1) + f"{i+1}/{len(remove_holds)} removed")

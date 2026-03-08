@@ -64,7 +64,7 @@ def entrypoint(args: Args):
             policy=policy,
             grouper=grouper,
             filter=filter,
-            allow_destroy_all=bool(args.snapshot),  # only allow if specific snapshots were passed
+            allow_destroy_all=args.allow_destroy_all or bool(args.snapshot),  # only allow if specific snapshots were passed
             dry_run=args.dry_run,
         )
 
