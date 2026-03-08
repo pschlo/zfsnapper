@@ -2,8 +2,6 @@ from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 
-from zfsnappr.common.zfs import Dataset
-
 
 class Direction(StrEnum):
     SEND = 'send'

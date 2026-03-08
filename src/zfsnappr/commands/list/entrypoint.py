@@ -5,7 +5,7 @@ from collections.abc import Collection, Mapping
 import logging
 
 from .args import Args
-from zfsnappr.common.zfs import Snapshot, ZfsCli, PeerInfo, Dataset
+from zfsnappr.common.zfs import Snapshot, ZfsCli, PeeringInfo, Dataset
 from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_peerinfo, get_holds
 from zfsnappr.common.filter import SnapFilter
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
@@ -48,8 +48,8 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, exten
         return
 
     fields = [
-        Field('DATASET',    lambda s: str(s.dataset)),
         Field('SHORT NAME', lambda s: s.shortname),
+        Field('DATASET',    lambda s: str(s.dataset)),
         Field('TAGS',       lambda s: ','.join(sorted(s.tags)) if s.tags is not None else 'UNSET'),
         Field('TIMESTAMP',  lambda s: str(s.timestamp)),
     ]
@@ -68,11 +68,11 @@ def format_snap_peers(snapshot: Snapshot, datasets: ResolvedDatasets, holdtags: 
     peers = {(hold.direction, get_peerinfo(dataset, hold.guid)) for hold in parse_holdtags(tags)}
     return [format_peerinfo(dir, p) for dir, p in peers]
 
-def format_peerinfo(direction: Direction, peer: PeerInfo | None):
+def format_peerinfo(direction: Direction, peer: PeeringInfo | None):
     match direction:
         case Direction.SEND:
-            return f"Send to {peer.host}::{peer.path} ({peer.last_used})" if peer else "Send to unknown"
+            return f"―→ {peer.host}" if peer else "―→ unknown"
         case Direction.RECEIVE:
-            return f"Receive from {peer.host}::{peer.path} ({peer.last_used})" if peer else "Receive from unknown"
+            return f"←― {peer.host}" if peer else "←― unknown"
         case _:
             assert False

@@ -7,7 +7,7 @@ from datetime import timedelta, datetime
 from zfsnappr.common.filter import SnapFilter, snapfilters
 from zfsnappr.common.args import CommonArgs
 from zfsnappr.common.sort import sortkey_snap_by_time
-from zfsnappr.common.zfs import ZfsCli, PeerInfo, PeerField, Dataset, Snapshot
+from zfsnappr.common.zfs import ZfsCli, PeeringInfo, PeerField, Dataset, Snapshot
 from zfsnappr.common.path import Path
 from zfsnappr.common.utils import combine_dicts, group_by, space
 from zfsnappr.common.resolve_datasets import ResolvedDatasets, resolve_dataset_specs
@@ -82,7 +82,7 @@ def get_holds(
 def _set_peerinfo_slot(
     cli: ZfsCli,
     dataset: Dataset,
-    peer: PeerInfo,
+    peer: PeeringInfo,
     slot: int
 ):
     """Serializes the peer and stores it at the given slot on the dataset."""
@@ -102,7 +102,7 @@ def _clear_peerinfo_slot(
 def update_peerinfo(
     cli: ZfsCli,
     dataset: Dataset,
-    peer: PeerInfo,
+    peer: PeeringInfo,
 ):
     """Update peer if it already exists, else add under first free slot."""
     # Find peer GUID
@@ -122,7 +122,7 @@ def update_peerinfo(
 def get_peerinfo(
     dataset: Dataset,
     guid: int
-) -> PeerInfo | None:
+) -> PeeringInfo | None:
     return next((p for slot, p in enumerate(dataset.peerinfos) if p is not None and p.guid == guid), None)
 
 

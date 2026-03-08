@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import Optional, Callable, cast, Unpack, TypeVarTuple
-from collections.abc import Collection
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 import logging
 
@@ -24,13 +24,34 @@ class Field[*Ts]:
     blank_on_wrap: bool = False
 
 
-def render_table[*Ts](fields: list[Field[*Ts]], data: Collection[tuple[*Ts]]) -> None:
+def render_table[*Ts](
+    fields: list[Field[*Ts]],
+    data: Collection[tuple[*Ts]],
+    column_separators: Sequence[str] | None = None,
+    header_column_separators: Sequence[str] | None = None,
+) -> None:
     headers = [f.name for f in fields]
+
+    if column_separators is None:
+        column_separators = [COLUMN_SEPARATOR] * (len(fields) - 1)
+    elif len(column_separators) != max(0, len(fields) - 1):
+        raise ValueError(
+            f"column_separators must have exactly {len(fields) - 1} entries "
+            f"(got {len(column_separators)})"
+        )
+    
+    if header_column_separators is None:
+        header_column_separators = column_separators
+    elif len(header_column_separators) != max(0, len(fields) - 1):
+        raise ValueError(
+            f"header_column_separators must have exactly {len(fields) - 1} entries "
+            f"(got {len(header_column_separators)})"
+        )
 
     # rows_blocks[row][col] = list of lines
     rows_blocks: list[list[list[str]]] = [
-        [cell_lines(f.get(*snap)) for f in fields]
-        for snap in data
+        [cell_lines(f.get(*row_data)) for f in fields]
+        for row_data in data
     ]
 
     # widths from the max visible line length in each column (including header)
@@ -41,10 +62,19 @@ def render_table[*Ts](fields: list[Field[*Ts]], data: Collection[tuple[*Ts]]) ->
             max_cell = max(max_cell, max(len(line) for line in row[col]))
         widths.append(max(len(headers[col]), max_cell))
 
-    total_width = (len(COLUMN_SEPARATOR) * (len(fields) - 1)) + sum(widths)
+    total_width = sum(widths) + sum(len(sep) for sep in column_separators)
+
+    def join_columns(parts: Sequence[str], separators: Sequence[str]) -> str:
+        if not parts:
+            return ""
+        out = [parts[0]]
+        for sep, part in zip(separators, parts[1:]):
+            out.append(sep)
+            out.append(part)
+        return "".join(out)
 
     # header
-    log.info(COLUMN_SEPARATOR.join(h.ljust(w) for h, w in zip(headers, widths)))
+    log.info(join_columns([h.ljust(w) for h, w in zip(headers, widths)], header_column_separators))
     log.info((HEADER_SEPARATOR * (total_width // len(HEADER_SEPARATOR) + 1))[:total_width])
 
     # body
@@ -63,7 +93,7 @@ def render_table[*Ts](fields: list[Field[*Ts]], data: Collection[tuple[*Ts]]) ->
 
                 parts.append(line.ljust(widths[col]))
 
-            log.info(COLUMN_SEPARATOR.join(parts))
+            log.info(join_columns(parts, column_separators))
 
 
 def cell_lines(text: str) -> list[str]:

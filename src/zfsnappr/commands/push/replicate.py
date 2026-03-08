@@ -12,8 +12,9 @@ from zfsnappr.common.command_utils import update_peerinfo, get_holds
 from zfsnappr.common.parse_dataset_arg import ConnSpec
 from zfsnappr.common.path import Path
 from zfsnappr.common.sort import sortkey_snap_by_time
-from zfsnappr.common.zfs import ZfsCli, Dataset, PeerInfo, Snapshot, ZfsDatasetType, ZfsProperty, Pool
+from zfsnappr.common.zfs import ZfsCli, Dataset, PeeringInfo, Snapshot, ZfsDatasetType, ZfsProperty, Pool
 from zfsnappr.common.utils import space
+from zfsnappr.common.replication.utils import Direction
 
 
 log = logging.getLogger(__name__)
@@ -105,8 +106,8 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
 
 
     # Update peer information
-    update_peerinfo(cli=source.cli, dataset=source.dataset, peer=to_peer(dest))
-    update_peerinfo(cli=dest.cli, dataset=dest.dataset, peer=to_peer(source))
+    update_peerinfo(cli=source.cli, dataset=source.dataset, peer=create_peering_info(dest, Direction.SEND))
+    update_peerinfo(cli=dest.cli, dataset=dest.dataset, peer=create_peering_info(source, Direction.RECEIVE))
 
     replicate_incrementally(source, dest, log_indent=log_indent)
 
@@ -196,9 +197,10 @@ def replicate_incrementally(source: DatasetSide, dest: DatasetSide, log_indent: 
     dest.snaps = [s.with_dataset(dest.path) for s in reversed(transfer_sequence[1:])] + dest.snaps
 
 
-def to_peer(side: DatasetSide):
+def create_peering_info(side: DatasetSide, direction: Direction):
     assert is_set(side.dataset)
-    return PeerInfo(
+    return PeeringInfo(
+        direction=direction,
         last_used=datetime.now(),
         guid=side.dataset.guid,
         path=side.path,

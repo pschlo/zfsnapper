@@ -11,6 +11,8 @@ import shlex
 import logging
 from zfsnappr.common.parse_dataset_arg import ConnSpec
 
+from zfsnappr.common.replication.utils import Direction
+
 from .path import Path
 
 
@@ -62,6 +64,7 @@ class ZfsProperty:
 
 class PeerField(StrEnum):
     """Used for custom user properties of the format `zfsnappr:peer:<slot>:<property>`."""
+    DIRECTION = 'direction'
     GUID = 'guid'
     HOST = 'host'
     PATH = 'path'
@@ -180,7 +183,8 @@ class Pool:
 
 
 @dataclass(eq=False)
-class PeerInfo:
+class PeeringInfo:
+    direction: Direction
     guid: int
     host: ConnSpec
     path: Path
@@ -191,7 +195,8 @@ class PeerInfo:
     def from_fields(cls, fields: dict[str, str]):
         P = PeerField
         fs = fields
-        return PeerInfo(
+        return PeeringInfo(
+            direction=Direction(fs.get(P.DIRECTION, Direction.SEND)),
             guid=int(fs[P.GUID]),
             host=ConnSpec.parse(fs[P.HOST]),
             path=Path(fs[P.PATH]),
@@ -201,6 +206,7 @@ class PeerInfo:
 
     def serialize(self) -> str:
         field_values: dict[PeerField, str] = {
+            PeerField.DIRECTION: str(self.direction),
             PeerField.GUID: str(self.guid),
             PeerField.PATH: str(self.path),
             PeerField.HOST: self.host.serialize(),
@@ -215,7 +221,7 @@ class Dataset:
     path: Path
     guid: int
     type: ZfsDatasetType
-    peerinfos: list[PeerInfo | None]
+    peerinfos: list[PeeringInfo | None]
 
     def __repr__(self) -> str:
         return f"Dataset({self.path})"
@@ -234,7 +240,7 @@ class Dataset:
         type = ZfsDatasetType(ps[P.TYPE].value)
 
         # Parse peer slots
-        peer_slots_dict: dict[int, PeerInfo | None] = {}
+        peer_slots_dict: dict[int, PeeringInfo | None] = {}
         for propkey, prop in ps.items():
             parts = propkey.split(':')
             if parts[:2] != ['zfsnappr', 'peer']:
@@ -252,7 +258,7 @@ class Dataset:
             for field in prop.value.split(';'):
                 f, v = field.split('=', maxsplit=1)
                 fields[f] = v
-            peer_slots_dict[slot] = PeerInfo.from_fields(fields)
+            peer_slots_dict[slot] = PeeringInfo.from_fields(fields)
         
         # Convert peer slots to list.
         # Raises KeyError if slots are not contiguous.
