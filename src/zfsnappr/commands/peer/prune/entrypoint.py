@@ -168,10 +168,3 @@ def sync_peer_conn(
     for i, (ds, peer) in enumerate(remove_peers):
         remove_peer(cli=cli, dataset=ds, peer_guid=peer.guid, holds=holds, log_indent=2)
         log.info(_s(1) + f"{i+1}/{len(remove_peers)} removed")
-
-
-def prune_unused_peers():
-    """
-    - Filter peers for age
-    - Remove peers + holdtags
-    """
