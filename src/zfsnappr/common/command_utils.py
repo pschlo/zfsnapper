@@ -139,13 +139,12 @@ def remove_peer(
     def _s(i: int = 0):
         return space(log_indent+i)
 
+    # Try to find in PeerInfos
     r = next(((slot, p) for slot, p in enumerate(dataset.peerinfos) if p and p.guid == peer_guid), None)
-    if r is None:
-        raise KeyError()
-    slot, peer = r
-
-    # # Clear slot
-    _clear_peerinfo_slot(cli=cli, dataset=dataset, slot=slot)
+    if r is not None:
+        # Clear slot
+        slot, peer = r
+        _clear_peerinfo_slot(cli=cli, dataset=dataset, slot=slot)
 
     # Determine peer holds on that dataset
     remove_holds: dict[ReplicationHold, set[Snapshot]] = {}

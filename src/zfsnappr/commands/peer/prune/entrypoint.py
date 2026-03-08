@@ -26,7 +26,8 @@ def entrypoint(args: Args) -> None:
         args.from_,
         args.unused_for,
         args.unheld,
-        args.unknown
+        args.unknown,
+        args.all
     ]):
         log.info(f"No prune policy specified, nothing to do")
         return
@@ -96,7 +97,8 @@ def entrypoint(args: Args) -> None:
             dry_run=args.dry_run,
             remove_older_than=parse_duration(args.unused_for) if args.unused_for is not None else None,
             remove_without_holds=args.unheld,
-            remove_unknown=args.unknown
+            remove_unknown=args.unknown,
+            remove_all=args.all
         )
 
 
@@ -110,7 +112,8 @@ def sync_peer_conn(
     dry_run: bool,
     remove_older_than: relativedelta | None,
     remove_without_holds: bool,
-    remove_unknown: bool
+    remove_unknown: bool,
+    remove_all: bool
 ):
     """
     - Check existing GUIDs on dest
@@ -127,6 +130,9 @@ def sync_peer_conn(
     now = datetime.now()
 
     def should_remove(ds: Dataset, peer_guid: int) -> bool:
+        if remove_all:
+            return True
+
         p = get_peerinfo(ds, peer_guid)
         if p is None:
             return remove_unknown

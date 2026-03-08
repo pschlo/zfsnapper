@@ -10,6 +10,7 @@ class Args(CommonArgs):
     unused_for: str | None
     unheld: bool
     unknown: bool
+    all: bool
 
 
 def setup(parser: ArgumentParser) -> None:
@@ -18,3 +19,4 @@ def setup(parser: ArgumentParser) -> None:
     parser.add_argument('--unused-for', metavar="DURATION", dest="unused_for")
     parser.add_argument('--unheld', action='store_true')
     parser.add_argument('--unknown', action='store_true')
+    parser.add_argument('--all', action='store_true')

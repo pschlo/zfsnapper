@@ -64,4 +64,8 @@ def list_conn(conn: ConnSpec, datasets: ResolvedDatasets, cli: ZfsCli):
         Field("LAST USED", lambda d, peer: str(p.last_used) if (p := get_peerinfo(d, peer)) else "?")
     ]
     peers = [(d, p) for d, ps in sort_dict(ds_to_peers, key=sortkey_dataset).items() for p in ps]
+    if not peers:
+        log.info("No matching peers")
+        return
+
     render_table(fields, peers)
