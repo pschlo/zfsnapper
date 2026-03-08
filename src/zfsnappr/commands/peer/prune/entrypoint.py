@@ -13,6 +13,7 @@ from zfsnappr.common.sort import sortkey_dataset
 from zfsnappr.common.utils import group_by, space
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
 from zfsnappr.common.parse_duration import parse_duration
+from zfsnappr.common.replication.utils import Peering
 
 from ..common.get_peers import get_peers
 
@@ -129,11 +130,11 @@ def sync_peer_conn(
 
     now = datetime.now()
 
-    def should_remove(ds: Dataset, peer_guid: int) -> bool:
+    def should_remove(ds: Dataset, peering: Peering) -> bool:
         if remove_all:
             return True
 
-        p = get_peerinfo(ds, peer_guid)
+        p = get_peerinfo(ds, peering)
         if p is None:
             return remove_unknown
 
@@ -143,12 +144,12 @@ def sync_peer_conn(
 
         # Check sync_conns
         for peer_conn, peer_guids in sync_conns_guids.items():
-            if p.host == peer_conn and p.guid not in peer_guids:
+            if p.host == peer_conn and peering.guid not in peer_guids:
                 return True
 
         # Check sync_pools
         for (peer_conn, peer_pool), peer_guids in sync_pools_guids.items():
-            if p.pool_guid == peer_pool.guid and p.guid not in peer_guids:
+            if p.pool_guid == peer_pool.guid and peering.guid not in peer_guids:
                 return True
 
         # Check last used
@@ -156,26 +157,26 @@ def sync_peer_conn(
             return True
 
         # Check if no holds
-        if remove_without_holds and not ds_peer_to_holds[(ds.path, p.guid)]:
+        if remove_without_holds and not ds_peer_to_holds[(ds.path, p.peering)]:
             return True
 
         return False
 
     # We don't remove a peer in general; we always remove a peer *from a dataset*.
     # E.g. a peer may be kept on one dataset but removed from another.
-    remove_peers: set[tuple[Dataset, int]] = set()
+    remove_peerings: set[tuple[Dataset, Peering]] = set()
     for d, ps in ds_to_peers.items():
         for p in ps:
             if should_remove(d, p):
-                remove_peers.add((d, p))
+                remove_peerings.add((d, p))
 
-    if not remove_peers:
+    if not remove_peerings:
         log.info(_s() + f"No peers to remove")
         return
 
-    log.info(_s() + f"Found {len(remove_peers)} peers to remove:")
-    for ds, peer in sorted(remove_peers, key=lambda t: sortkey_dataset(t[0])):
-        if p := get_peerinfo(ds, peer):
+    log.info(_s() + f"Found {len(remove_peerings)} peers to remove:")
+    for ds, peering in sorted(remove_peerings, key=lambda t: sortkey_dataset(t[0])):
+        if p := get_peerinfo(ds, peering):
             log.info(_s(1) + f"Peer {p.host}::{p.path} on dataset {ds.path}")
         else:
             log.info(_s(1) + f"Unknown peer on dataset {ds.path}")
@@ -185,6 +186,6 @@ def sync_peer_conn(
         return
 
     log.info(_s() + f"Removing peers")
-    for i, (ds, peer) in enumerate(remove_peers):
-        remove_peer(cli=cli, dataset=ds, peer_guid=peer, holds=holds, log_indent=2)
-        log.info(_s(1) + f"{i+1}/{len(remove_peers)} removed")
+    for i, (ds, peering) in enumerate(remove_peerings):
+        remove_peer(cli=cli, dataset=ds, peering=peering, holds=holds, log_indent=2)
+        log.info(_s(1) + f"{i+1}/{len(remove_peerings)} removed")

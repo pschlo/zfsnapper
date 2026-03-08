@@ -17,16 +17,16 @@ def parse_duration(input: str) -> relativedelta:
         num = input[start:i]
         start = i+1
         if not num:
-            raise ParseError(input, f'Unit "{c}" is without number')
+            raise ParseError(input, f"Unit is without number: {c}")
         if c in res:
-            raise ParseError(input, f'Duplicate unit "{c}"')
+            raise ParseError(input, f"Duplicate unit: {c}")
         try:
             res[c] = int(num)
         except ValueError:
-            raise ParseError(input, f'Invalid number "{num}"')
+            raise ParseError(input, f"Invalid number: {num}")
 
     if not start == len(input):
-        raise ParseError(input, f'Number "{input[start:]}" is without unit')
+        raise ParseError(input, f"Number is without unit: {{input[start:]}}")
 
     return relativedelta(
         years=res.get('y', 0),

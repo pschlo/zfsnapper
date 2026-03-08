@@ -9,9 +9,9 @@ from abc import ABC, abstractmethod
 from itertools import batched
 import shlex
 import logging
-from zfsnappr.common.parse_dataset_arg import ConnSpec
 
-from zfsnappr.common.replication.utils import Direction
+from zfsnappr.common.parse_dataset_arg import ConnSpec
+from zfsnappr.common.replication.utils import Direction, Peering
 
 from .path import Path
 
@@ -184,8 +184,7 @@ class Pool:
 
 @dataclass(eq=False)
 class PeeringInfo:
-    direction: Direction
-    guid: int
+    peering: Peering
     host: ConnSpec
     path: Path
     pool_guid: int
@@ -196,18 +195,20 @@ class PeeringInfo:
         P = PeerField
         fs = fields
         return PeeringInfo(
-            direction=Direction(fs.get(P.DIRECTION, Direction.SEND)),
-            guid=int(fs[P.GUID]),
+            peering=Peering(
+                direction=Direction(fs[P.DIRECTION]),
+                guid=int(fs[P.GUID])
+            ),
             host=ConnSpec.parse(fs[P.HOST]),
             path=Path(fs[P.PATH]),
-            pool_guid=int(fs.get(P.POOL_GUID, 0)),
+            pool_guid=int(fs[P.POOL_GUID]),
             last_used=datetime.fromtimestamp(int(fs[P.LAST_USED]))
         )
 
     def serialize(self) -> str:
         field_values: dict[PeerField, str] = {
-            PeerField.DIRECTION: str(self.direction),
-            PeerField.GUID: str(self.guid),
+            PeerField.DIRECTION: str(self.peering.direction),
+            PeerField.GUID: str(self.peering.guid),
             PeerField.PATH: str(self.path),
             PeerField.HOST: self.host.serialize(),
             PeerField.POOL_GUID: str(self.pool_guid),
@@ -263,22 +264,22 @@ class Dataset:
         # Convert peer slots to list.
         # Raises KeyError if slots are not contiguous.
         max_slot = max(peer_slots_dict.keys())
-        peer_slots = [peer_slots_dict[i] for i in range(max_slot+1)]
+        peerinfo_slots = [peer_slots_dict[i] for i in range(max_slot+1)]
 
-        # Assert no peer GUID is duplicated
-        _guids: set[int] = set()
-        for p in peer_slots:
+        # Assert no peering is duplicated, i.e. at most 1 info per peering
+        _peerings: set[Peering] = set()
+        for p in peerinfo_slots:
             if p is None:
                 continue
-            if p.guid in _guids:
-                raise ValueError(f"Duplicate peer GUID: {p.guid}")
-            _guids.add(p.guid)
+            if p.peering in _peerings:
+                raise ValueError(f"Duplicate peering: {p.peering}")
+            _peerings.add(p.peering)
 
         return Dataset(
             path=path,
             guid=guid,
             type=type,
-            peerinfos=peer_slots
+            peerinfos=peerinfo_slots
         )
 
 

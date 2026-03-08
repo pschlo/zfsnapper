@@ -9,19 +9,19 @@ class Direction(StrEnum):
 
 
 @dataclass(frozen=True, eq=True)
-class ReplicationHold:
+class Peering:
     direction: Direction
     guid: int
 
     @classmethod
     def from_tag(cls, tag: str):
         if tag.startswith('zfsnappr-recvbase-'):
-            return ReplicationHold(
+            return Peering(
                 Direction.RECEIVE,
                 int(tag.removeprefix('zfsnappr-recvbase-'))
             )
         if tag.startswith('zfsnappr-sendbase-'):
-            return ReplicationHold(
+            return Peering(
                 Direction.SEND,
                 int(tag.removeprefix('zfsnappr-sendbase-'))
             )
@@ -37,11 +37,11 @@ class ReplicationHold:
                 assert False
 
 
-def parse_holdtags(tags: Iterable[str]) -> list[ReplicationHold]:
-    res: list[ReplicationHold] = []
+def parse_holdtags(tags: Iterable[str]) -> list[Peering]:
+    res: list[Peering] = []
     for tag in tags:
         try:
-            res.append(ReplicationHold.from_tag(tag))
+            res.append(Peering.from_tag(tag))
         except ValueError:
             pass
     return res

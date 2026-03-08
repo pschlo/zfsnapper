@@ -14,7 +14,7 @@ from zfsnappr.common.path import Path
 from zfsnappr.common.sort import sortkey_snap_by_time
 from zfsnappr.common.zfs import ZfsCli, Dataset, PeeringInfo, Snapshot, ZfsDatasetType, ZfsProperty, Pool
 from zfsnappr.common.utils import space
-from zfsnappr.common.replication.utils import Direction
+from zfsnappr.common.replication.utils import Direction, Peering
 
 
 log = logging.getLogger(__name__)
@@ -67,8 +67,8 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         dest.dataset = dest.cli.get_dataset(dest.path)
 
         # Determine holdtags
-        source.holdtag = f'zfsnappr-sendbase-{dest.dataset.guid}'
-        dest.holdtag = f'zfsnappr-recvbase-{source.dataset.guid}'
+        source.holdtag = Peering(Direction.SEND, dest.dataset.guid).to_tag()
+        dest.holdtag = Peering(Direction.RECEIVE, source.dataset.guid).to_tag()
 
         # Create holds
         source.cli.hold([source.base_snap.longname], source.holdtag)
@@ -81,8 +81,8 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         dest.snaps.sort(key=sortkey_snap_by_time, reverse=True)
 
         # Determine holdtags
-        source.holdtag = f'zfsnappr-sendbase-{dest.dataset.guid}'
-        dest.holdtag = f'zfsnappr-recvbase-{source.dataset.guid}'
+        source.holdtag = Peering(Direction.SEND, dest.dataset.guid).to_tag()
+        dest.holdtag = Peering(Direction.RECEIVE, source.dataset.guid).to_tag()
 
         # Determine base snap
         source.base_snap, dest.base_snap = determine_latest_common(source, dest)
@@ -106,8 +106,8 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
 
 
     # Update peer information
-    update_peerinfo(cli=source.cli, dataset=source.dataset, peer=create_peering_info(dest, Direction.SEND))
-    update_peerinfo(cli=dest.cli, dataset=dest.dataset, peer=create_peering_info(source, Direction.RECEIVE))
+    update_peerinfo(cli=source.cli, dataset=source.dataset, peerinfo=create_peering_info(dest, Direction.SEND))
+    update_peerinfo(cli=dest.cli, dataset=dest.dataset, peerinfo=create_peering_info(source, Direction.RECEIVE))
 
     replicate_incrementally(source, dest, log_indent=log_indent)
 
@@ -200,9 +200,11 @@ def replicate_incrementally(source: DatasetSide, dest: DatasetSide, log_indent: 
 def create_peering_info(side: DatasetSide, direction: Direction):
     assert is_set(side.dataset)
     return PeeringInfo(
-        direction=direction,
+        peering=Peering(
+            direction=direction,
+            guid=side.dataset.guid
+        ),
         last_used=datetime.now(),
-        guid=side.dataset.guid,
         path=side.path,
         pool_guid=side.pool.guid,
         host=side.conn

@@ -9,7 +9,7 @@ from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, get
 from zfsnappr.common.parse_dataset_arg import ConnSpec
 from zfsnappr.common.sort import sortkey_dataset
 from zfsnappr.common.utils import sort_dict
-from zfsnappr.common.replication.utils import Direction
+from zfsnappr.common.replication.utils import Direction, Peering
 from zfsnappr.common.render_table import render_table, Field
 
 from ..common.get_peers import get_peers
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-Field = Field[Dataset, int]
+Field = Field[Dataset, Peering]
 
 
 def entrypoint(args: Args):
@@ -56,7 +56,7 @@ def list_conn(conn: ConnSpec, datasets: ResolvedDatasets, cli: ZfsCli):
 
     fields = [
         Field("PATH", lambda d, p: str(d.path)),
-        Field("", lambda d, peer: ("―→" if p.direction == Direction.SEND else "←―") if (p := get_peerinfo(d, peer)) else "?"),
+        Field("", lambda d, peer: ("―→" if p.peering.direction == Direction.SEND else "←―") if (p := get_peerinfo(d, peer)) else "?"),
         Field("PEER", lambda d, peer: str(p.host) if (p := get_peerinfo(d, peer)) else "?"),
         Field("", lambda d, peer: str(p.path) if (p := get_peerinfo(d, peer)) else "?"),
         Field("HOLDS", lambda d, peer:

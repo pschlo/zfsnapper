@@ -3,7 +3,7 @@ from collections.abc import Collection
 
 from zfsnappr.common.zfs import Dataset, Snapshot
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
-from zfsnappr.common.command_utils import parse_holdtags, Path, group_by, ReplicationHold
+from zfsnappr.common.command_utils import parse_holdtags, Path, group_by, Peering
 
 
 def get_peers(snaps: Collection[Snapshot], holds: dict[Snapshot, set[str]], datasets: ResolvedDatasets):
@@ -15,36 +15,28 @@ def get_peers(snaps: Collection[Snapshot], holds: dict[Snapshot, set[str]], data
 
     _ds_to_holds: dict[
         Dataset,
-        set[tuple[Snapshot, ReplicationHold]]
+        set[tuple[Snapshot, Peering]]
     ] = {}
     for dset in datasets.matched:
-        _holds: set[tuple[Snapshot, ReplicationHold]] = set()
+        _holds: set[tuple[Snapshot, Peering]] = set()
         for s in _ds_to_snaps[dset.path]:
             _holds.update((s, h) for h in parse_holdtags(holds[s]))
         _ds_to_holds[dset] = _holds
 
 
-    # Registered GUIDs PLUS those on holds
-    ds_to_peers: dict[Dataset, set[int]] = {}
+    # Peerings on datasets plus peerings on holds
+    ds_to_peerings: dict[Dataset, set[Peering]] = {}
     for ds, _holds in _ds_to_holds.items():
-        ds_to_peers[ds] = {
-            *(h.guid for _, h in _holds),
-            *(p.guid for p in ds.peerinfos if p)
+        ds_to_peerings[ds] = {
+            *(peering for _, peering in _holds),
+            *(p.peering for p in ds.peerinfos if p)
         }
 
 
-    # Group holds by (ds, peer)
-    ds_peer_to_holds: dict[
-        tuple[Path, int],
-        set[tuple[Snapshot, ReplicationHold]]
-    ] = {}
+    # Group holds by (ds, peering)
+    ds_peer_to_holds = {(d.path, p): set[Snapshot]() for d, ps in ds_to_peerings.items() for p in ps}
     for ds, _holds in _ds_to_holds.items():
         for snap, h in _holds:
-            ds_peer_to_holds.setdefault((ds.path, h.guid), set()).add((snap, h))
-    
-    # Update keys so that all (ds, peer) keys are present
-    for d, ps in ds_to_peers.items():
-        for p in ps:
-            ds_peer_to_holds.setdefault((d.path, p), set())
+            ds_peer_to_holds[(ds.path, h)].add(snap)
 
-    return ds_to_peers, ds_peer_to_holds
+    return ds_to_peerings, ds_peer_to_holds

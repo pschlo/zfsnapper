@@ -65,7 +65,7 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, exten
 def format_snap_peers(snapshot: Snapshot, datasets: ResolvedDatasets, holdtags: Mapping[Snapshot, Collection[str]]) -> list[str]:
     dataset = datasets.path_to_dataset[snapshot.dataset]
     tags = holdtags[snapshot]
-    peers = {(hold.direction, get_peerinfo(dataset, hold.guid)) for hold in parse_holdtags(tags)}
+    peers = {(hold.direction, get_peerinfo(dataset, hold)) for hold in parse_holdtags(tags)}
     return [format_peerinfo(dir, p) for dir, p in peers]
 
 def format_peerinfo(direction: Direction, peer: PeeringInfo | None):
