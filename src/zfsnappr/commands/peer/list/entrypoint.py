@@ -60,7 +60,9 @@ def list_conn(conn: ConnSpec, datasets: ResolvedDatasets, cli: ZfsCli):
         Field("PEER", lambda d, peer: str(p.host) if (p := get_peerinfo(d, peer)) else "?"),
         Field("", lambda d, peer: str(p.path) if (p := get_peerinfo(d, peer)) else "?"),
         Field("HOLDS", lambda d, peer:
-            str(len(ds_peer_to_holds[(d.path, peer)]))
+            "\n".join(
+                s.shortname for s in ds_peer_to_holds[(d.path, peer)]
+            )
         ),
         Field("LAST USED", lambda d, peer: str(p.last_used) if (p := get_peerinfo(d, peer)) else "?")
     ]
@@ -72,6 +74,7 @@ def list_conn(conn: ConnSpec, datasets: ResolvedDatasets, cli: ZfsCli):
     render_table(
         fields,
         peers,
-        column_separators=['  ', '  ', ' :: ', ' | ', ' | '],
-        header_column_separators=['  ', '  ', '    ', ' | ', ' | ']
+        column_separators=["  ", "  ", " :: ", " | ", " | "],
+        header_column_separators=["  ", "  ", "    ", " | ", " | "],
+        column_separator_modes=["always", "always", "both", "always", "always"],
     )
