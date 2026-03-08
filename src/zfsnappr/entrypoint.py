@@ -9,14 +9,14 @@ from .setup_logging import setup_logging
 setup_logging()
 from .args import get_args
 from .commands import (
-  prune as _prune,
-  create as _create,
-  push as _push,
-  list as _list,
-  tag as _tag,
-  unhold as _unhold,
-  version as _version,
-  peer as _peer
+    prune as _prune,
+    create as _create,
+    push as _push,
+    list as _list,
+    tag as _tag,
+    unhold as _unhold,
+    version as _version,
+    peer as _peer
 )
 
 log = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ def cli():
         _entrypoint()
     except Exception as e:
         log.error(e)
-        raise
+        # raise
         sys.exit(1)
 
 

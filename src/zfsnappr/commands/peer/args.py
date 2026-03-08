@@ -15,7 +15,7 @@ class Args(CommonArgs):
 
 
 def setup(parser: ArgumentParser, common: ArgumentParser) -> None:
-    subparsers = parser.add_subparsers(dest="peer_command")
+    subparsers = parser.add_subparsers(dest="peer_command", required=True)
 
     _list.args.setup(
         subparsers.add_parser("list", parents=[common])
