@@ -83,10 +83,11 @@ def _set_peerinfo_slot(
     cli: ZfsCli,
     dataset: Dataset,
     peer: PeeringInfo,
-    slot: int
+    slot: int,
+    localhost: str | None = None
 ):
     """Serializes the peer and stores it at the given slot on the dataset."""
-    cli.set_property(dataset.path, f"zfsnapper:peer:{slot}", peer.serialize())
+    cli.set_property(dataset.path, f"zfsnapper:peer:{slot}", peer.serialize(localhost=localhost))
     dataset.peerinfos[slot] = peer
 
 
@@ -103,6 +104,7 @@ def update_peerinfo(
     cli: ZfsCli,
     dataset: Dataset,
     peerinfo: PeeringInfo,
+    localhost: str | None = None
 ):
     """Update peer if it already exists, else add under first free slot."""
     # Find peer GUID
@@ -112,14 +114,14 @@ def update_peerinfo(
     )
     if curr_slot is not None:
         # Peer already exists in slot; overwrite
-        _set_peerinfo_slot(cli=cli, dataset=dataset, peer=peerinfo, slot=curr_slot)
+        _set_peerinfo_slot(cli=cli, dataset=dataset, peer=peerinfo, slot=curr_slot, localhost=localhost)
         return
 
     # Find first free slot
     slot = next((slot for slot, p in enumerate(dataset.peerinfos) if p is None), None)
     if slot is None:
         raise RuntimeError(f"Cannot set peer on dataset {dataset.path}: no free slots")
-    _set_peerinfo_slot(cli=cli, dataset=dataset, peer=peerinfo, slot=slot)
+    _set_peerinfo_slot(cli=cli, dataset=dataset, peer=peerinfo, slot=slot, localhost=localhost)
 
 
 def get_peerinfo(

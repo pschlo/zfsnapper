@@ -42,7 +42,7 @@ class DatasetSide:
     base_snap: Snapshot | None | NotSet = NOT_SET
 
 
-def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: bool, allow_init: bool, log_indent: int = 0):
+def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: bool, allow_init: bool, localhost: str | None, log_indent: int = 0):
     def _s(level: int = 0):
         return space(log_indent + level)
 
@@ -106,8 +106,8 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
 
 
     # Update peer information
-    update_peerinfo(cli=source.cli, dataset=source.dataset, peerinfo=create_peering_info(dest, Direction.SEND))
-    update_peerinfo(cli=dest.cli, dataset=dest.dataset, peerinfo=create_peering_info(source, Direction.RECEIVE))
+    update_peerinfo(cli=source.cli, dataset=source.dataset, peerinfo=create_peering_info(dest, Direction.SEND), localhost=localhost)
+    update_peerinfo(cli=dest.cli, dataset=dest.dataset, peerinfo=create_peering_info(source, Direction.RECEIVE), localhost=localhost)
 
     replicate_incrementally(source, dest, log_indent=log_indent)
 

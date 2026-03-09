@@ -68,4 +68,4 @@ def format_snap_peers(snapshot: Snapshot, datasets: ResolvedDatasets, holdtags: 
 
 def format_peering(dataset: Dataset, peering: Peering):
     p = get_peerinfo(dataset, peering)
-    return f"{peering.direction.icon} {p.host if p else '?'}"
+    return f"{peering.direction.icon}  {p.host if p else '?'}"

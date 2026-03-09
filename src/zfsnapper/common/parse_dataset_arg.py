@@ -17,9 +17,9 @@ class ConnSpec:
     def __str__(self) -> str:
         return self.serialize()
 
-    def serialize(self) -> str:
+    def serialize(self, localhost: str | None = None) -> str:
         if self.host is None:
-            return f"{LOCAL_NODE_NAME}"
+            return localhost or LOCAL_NODE_NAME
 
         res = self.host
         if self.user:

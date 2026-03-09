@@ -42,7 +42,8 @@ def entrypoint(args: Args) -> None:
             allow_init=args.init,
             rollback=args.rollback,
             src_conn=conn,
-            dst_conn=dest_spec.conn
+            dst_conn=dest_spec.conn,
+            localhost=args.localhost
         )
 
 
@@ -55,7 +56,8 @@ def push_conn(
     allow_init: bool,
     rollback: bool,
     src_conn: ConnSpec,
-    dst_conn: ConnSpec
+    dst_conn: ConnSpec,
+    localhost: str | None
 ):
     """
     Push MULTIPLE source datasets to SINGLE dest dataset
@@ -122,9 +124,10 @@ def push_conn(
             dataset=dest_datasets.path_to_dataset[destpath] if destpath not in missing_dest_paths else NOT_SET,
             snaps=destpath_to_snaps[destpath] if destpath not in missing_dest_paths else NOT_SET
         )
+
         try:
             log.info(_s(1) + f"Checking dataset: ~{f'/{relpath}' if relpath else ''}")
-            replicate(source, dest, relpath=relpath, rollback=rollback, allow_init=allow_init, log_indent=2)
+            replicate(source, dest, relpath=relpath, rollback=rollback, allow_init=allow_init, localhost=localhost, log_indent=2)
         except ReplicationError as e:
             is_error = True
             log.error(space(e.log_indent) + str(e))

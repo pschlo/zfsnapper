@@ -205,12 +205,12 @@ class PeeringInfo:
             last_used=datetime.fromtimestamp(int(fs[P.LAST_USED]))
         )
 
-    def serialize(self) -> str:
+    def serialize(self, localhost: str | None = None) -> str:
         field_values: dict[PeerField, str] = {
             PeerField.DIRECTION: str(self.peering.direction),
             PeerField.GUID: str(self.peering.guid),
             PeerField.PATH: str(self.path),
-            PeerField.HOST: self.host.serialize(),
+            PeerField.HOST: self.host.serialize(localhost=localhost),
             PeerField.POOL_GUID: str(self.pool_guid),
             PeerField.LAST_USED: str(int(self.last_used.timestamp()))
         }
