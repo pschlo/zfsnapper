@@ -11,7 +11,7 @@ def sortkey_snap_by_time(snap: Snapshot):
 
 def sortkey_dataset(dataset: Dataset | Path | str):
     path = dataset.path if isinstance(dataset, Dataset) else Path(dataset)
-    return (path.depth, path)
+    return path
 
 def sortkey_conn(conn: ConnSpec):
     return (conn.host, conn.user, conn.port)
