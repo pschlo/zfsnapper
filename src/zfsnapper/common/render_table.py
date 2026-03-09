@@ -10,8 +10,8 @@ from zfsnapper.common.zfs import Snapshot
 log = logging.getLogger(__name__)
 
 
-COLUMN_SEPARATOR = " │ "
-HEADER_SEPARATOR = "─"
+VERTICAL_BAR = "│"
+HORIZONTAL_BAR = "─"
 
 Ts = TypeVarTuple("Ts")
 SeparatorMode = Literal["always", "both", "either"]
@@ -39,7 +39,7 @@ def render_table[*Ts](
     separator_count = max(0, len(fields) - 1)
 
     if column_separators is None:
-        column_separators = [COLUMN_SEPARATOR] * separator_count
+        column_separators = [f" {VERTICAL_BAR} "] * separator_count
     elif len(column_separators) != separator_count:
         raise ValueError(
             f"column_separators must have exactly {separator_count} entries "
@@ -147,7 +147,7 @@ def render_table[*Ts](
             header_column_separators,
         )
     )
-    log.info((HEADER_SEPARATOR * (total_width // len(HEADER_SEPARATOR) + 1))[:total_width])
+    log.info((HORIZONTAL_BAR * (total_width // len(HORIZONTAL_BAR) + 1))[:total_width])
 
     # body
     for row in rows_blocks:

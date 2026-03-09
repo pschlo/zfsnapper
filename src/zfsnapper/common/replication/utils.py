@@ -9,7 +9,7 @@ class Direction(StrEnum):
 
     @property
     def icon(self):
-        return '―→' if self == Direction.SEND else '←―'
+        return '🡒' if self == Direction.SEND else '🡐'
 
 
 @dataclass(frozen=True, eq=True)

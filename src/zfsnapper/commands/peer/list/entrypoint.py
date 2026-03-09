@@ -10,7 +10,7 @@ from zfsnapper.common.parse_dataset_arg import ConnSpec
 from zfsnapper.common.sort import sortkey_dataset
 from zfsnapper.common.utils import sort_dict
 from zfsnapper.common.replication.utils import Direction, Peering
-from zfsnapper.common.render_table import render_table, Field
+from zfsnapper.common.render_table import render_table, Field, VERTICAL_BAR
 
 from ..common.get_peers import get_peers
 
@@ -74,7 +74,7 @@ def list_conn(conn: ConnSpec, datasets: ResolvedDatasets, cli: ZfsCli):
     render_table(
         fields,
         peers,
-        column_separators=["  ", "  ", " :: ", " | ", " | "],
-        header_column_separators=["  ", "  ", "    ", " | ", " | "],
+        column_separators=["  ", "  ", " :: ", f" {VERTICAL_BAR} ", f" {VERTICAL_BAR} "],
+        header_column_separators=["  ", "  ", "    ", f" {VERTICAL_BAR} ", f" {VERTICAL_BAR} "],
         column_separator_modes=["always", "always", "both", "always", "always"],
     )
