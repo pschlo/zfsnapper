@@ -87,7 +87,6 @@ def entrypoint(args: Args) -> None:
             log.info("")
         _first = False
 
-        log.info(f"[{conn}] Pruning peers")
         sync_peer_conn(
             conn=conn,
             cli=cli,
@@ -125,6 +124,8 @@ def sync_peer_conn(
     """
     def _s(i: int = 0):
         return space(i+1)
+    
+    log.info(f"[{conn.serialize(localhost=localhost)}] Pruning peers")
 
     snaps = fetch_snaps(cli, datasets)
     holds = get_holds(cli, snaps)
