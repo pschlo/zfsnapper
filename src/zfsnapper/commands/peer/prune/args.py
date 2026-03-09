@@ -11,6 +11,7 @@ class Args(CommonArgs):
     unheld: bool
     unknown: bool
     all: bool
+    localhost: str | None
 
 
 def setup(parser: ArgumentParser) -> None:
@@ -20,3 +21,4 @@ def setup(parser: ArgumentParser) -> None:
     parser.add_argument('--unheld', action='store_true')
     parser.add_argument('--unknown', action='store_true')
     parser.add_argument('--all', action='store_true')
+    parser.add_argument('--localhost', type=str)

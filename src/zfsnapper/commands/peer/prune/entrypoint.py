@@ -99,7 +99,8 @@ def entrypoint(args: Args) -> None:
             remove_older_than=parse_duration(args.unused_for) if args.unused_for is not None else None,
             remove_without_holds=args.unheld,
             remove_unknown=args.unknown,
-            remove_all=args.all
+            remove_all=args.all,
+            localhost=args.localhost
         )
 
 
@@ -114,7 +115,8 @@ def sync_peer_conn(
     remove_older_than: relativedelta | None,
     remove_without_holds: bool,
     remove_unknown: bool,
-    remove_all: bool
+    remove_all: bool,
+    localhost: str | None
 ):
     """
     - Check existing GUIDs on dest
@@ -144,7 +146,8 @@ def sync_peer_conn(
 
         # Check sync_conns
         for peer_conn, peer_guids in sync_conns_guids.items():
-            if p.host == peer_conn and peering.guid not in peer_guids:
+            # Serialize so that localhost is resolved to string
+            if p.host.serialize(localhost=localhost) == peer_conn.serialize(localhost=localhost) and peering.guid not in peer_guids:
                 return True
 
         # Check sync_pools
