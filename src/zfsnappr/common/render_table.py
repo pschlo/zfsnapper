@@ -10,8 +10,8 @@ from zfsnappr.common.zfs import Snapshot
 log = logging.getLogger(__name__)
 
 
-COLUMN_SEPARATOR = " | "
-HEADER_SEPARATOR = "-"
+COLUMN_SEPARATOR = " │ "
+HEADER_SEPARATOR = "─"
 
 Ts = TypeVarTuple("Ts")
 SeparatorMode = Literal["always", "both", "either"]

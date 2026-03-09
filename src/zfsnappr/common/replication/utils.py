@@ -7,6 +7,10 @@ class Direction(StrEnum):
     SEND = 'send'
     RECEIVE = 'receive'
 
+    @property
+    def icon(self):
+        return '―→' if self == Direction.SEND else '←―'
+
 
 @dataclass(frozen=True, eq=True)
 class Peering:

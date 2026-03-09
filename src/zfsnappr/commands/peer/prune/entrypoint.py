@@ -13,7 +13,7 @@ from zfsnappr.common.sort import sortkey_dataset
 from zfsnappr.common.utils import group_by, space
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
 from zfsnappr.common.parse_duration import parse_duration
-from zfsnappr.common.replication.utils import Peering
+from zfsnappr.common.replication.utils import Peering, Direction
 
 from ..common.get_peers import get_peers
 
@@ -174,12 +174,12 @@ def sync_peer_conn(
         log.info(_s() + f"No peers to remove")
         return
 
-    log.info(_s() + f"Found {len(remove_peerings)} peers to remove:")
+    log.info(_s() + f"Found {len(remove_peerings)} peerings to remove:")
     for ds, peering in sorted(remove_peerings, key=lambda t: sortkey_dataset(t[0])):
         if p := get_peerinfo(ds, peering):
-            log.info(_s(1) + f"Peer {p.host}::{p.path} on dataset {ds.path}")
+            log.info(_s(1) + f"{ds.path} {peering.direction.icon} {p.host}::{p.path}")
         else:
-            log.info(_s(1) + f"Unknown peer on dataset {ds.path}")
+            log.info(_s(1) + f"{ds.path} ―― unknown")
 
     if dry_run:
         log.info(_s() + "Dry-run enabled, not removing any peers")

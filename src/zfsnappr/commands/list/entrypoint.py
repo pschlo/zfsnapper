@@ -5,7 +5,7 @@ from collections.abc import Collection, Mapping
 import logging
 
 from .args import Args
-from zfsnappr.common.zfs import Snapshot, ZfsCli, PeeringInfo, Dataset
+from zfsnappr.common.zfs import Snapshot, ZfsCli, PeeringInfo, Dataset, Peering
 from zfsnappr.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_peerinfo, get_holds
 from zfsnappr.common.filter import SnapFilter
 from zfsnappr.common.resolve_datasets import ResolvedDatasets
@@ -64,15 +64,8 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, exten
 
 def format_snap_peers(snapshot: Snapshot, datasets: ResolvedDatasets, holdtags: Mapping[Snapshot, Collection[str]]) -> list[str]:
     dataset = datasets.path_to_dataset[snapshot.dataset]
-    tags = holdtags[snapshot]
-    peers = {(hold.direction, get_peerinfo(dataset, hold)) for hold in parse_holdtags(tags)}
-    return [format_peerinfo(dir, p) for dir, p in peers]
+    return [format_peering(dataset, p) for p in parse_holdtags(holdtags[snapshot])]
 
-def format_peerinfo(direction: Direction, peer: PeeringInfo | None):
-    match direction:
-        case Direction.SEND:
-            return f"―→ {peer.host}" if peer else "―→ unknown"
-        case Direction.RECEIVE:
-            return f"←― {peer.host}" if peer else "←― unknown"
-        case _:
-            assert False
+def format_peering(dataset: Dataset, peering: Peering):
+    p = get_peerinfo(dataset, peering)
+    return f"{peering.direction.icon} {p.host if p else 'unknown'}"
