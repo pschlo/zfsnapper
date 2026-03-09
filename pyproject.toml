@@ -1,7 +1,7 @@
 [project]
 name = "zfsnapper"
-version = "1.6.7"
-description = "Add your description here"
+version = "1.6.8"
+# description = "Add your description here"
 readme = "README.md"
 authors = [
     { name = "pschlo", email = "70105856+pschlo@users.noreply.github.com" }

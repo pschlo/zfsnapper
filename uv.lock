@@ -24,8 +24,8 @@ wheels = [
 ]
 
 [[package]]
-name = "zfsnappr"
-version = "1.6.7"
+name = "zfsnapper"
+version = "1.6.8"
 source = { editable = "." }
 dependencies = [
     { name = "python-dateutil" },
