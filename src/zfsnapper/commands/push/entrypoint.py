@@ -72,7 +72,7 @@ def push_conn(
 
     # Find longest common src prefix; may be empty path
     src_root = src_datasets.p.deepest_common_ancestor
-    log.info(f"[{src_conn} → {dst_conn}] Replicating: {src_root}/* → {dest_root}/*")
+    log.info(f"[{src_conn.format(localhost)} → {dst_conn.format(localhost)}] Replicating: {src_root}/* → {dest_root}/*")
 
     # Create matching of source dataset to dest dataset
     srcpath_to_destpath = {

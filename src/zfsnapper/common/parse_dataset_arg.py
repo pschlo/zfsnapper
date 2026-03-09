@@ -15,7 +15,10 @@ class ConnSpec:
     port: int | None
 
     def __str__(self) -> str:
-        return self.serialize()
+        return self.format()
+
+    def format(self, localhost: str | None = None) -> str:
+        return self.serialize(localhost=localhost)
 
     def serialize(self, localhost: str | None = None) -> str:
         if self.host is None:
