@@ -15,6 +15,7 @@ HEADER_SEPARATOR = "-"
 
 Ts = TypeVarTuple("Ts")
 SeparatorMode = Literal["always", "both", "either"]
+Alignment = Literal["left", "right"]
 
 
 @dataclass
@@ -23,6 +24,8 @@ class Field[*Ts]:
     get: Callable[[Unpack[Ts]], str]
     # whether to blank this column on wrapped lines
     blank_on_wrap: bool = False
+    align: Alignment = "left"
+    header_align: Alignment | None = None
 
 
 def render_table[*Ts](
@@ -63,6 +66,19 @@ def render_table[*Ts](
     if invalid_modes:
         raise ValueError(f"invalid column separator modes: {invalid_modes!r}")
 
+    invalid_alignments = [
+        f.align for f in fields if f.align not in {"left", "right"}
+    ]
+    if invalid_alignments:
+        raise ValueError(f"invalid field alignments: {invalid_alignments!r}")
+
+    invalid_header_alignments = [
+        f.header_align for f in fields
+        if f.header_align is not None and f.header_align not in {"left", "right"}
+    ]
+    if invalid_header_alignments:
+        raise ValueError(f"invalid field header_align values: {invalid_header_alignments!r}")
+
     # rows_blocks[row][col] = list of lines
     rows_blocks: list[list[list[str]]] = [
         [cell_lines(f.get(*row_data)) for f in fields]
@@ -78,6 +94,13 @@ def render_table[*Ts](
         widths.append(max(len(headers[col]), max_cell))
 
     total_width = sum(widths) + sum(len(sep) for sep in column_separators)
+
+    def justify(text: str, width: int, align: Alignment) -> str:
+        if align == "left":
+            return text.ljust(width)
+        if align == "right":
+            return text.rjust(width)
+        raise ValueError(f"invalid alignment: {align!r}")
 
     def join_columns(
         parts: Sequence[str],
@@ -114,9 +137,13 @@ def render_table[*Ts](
         return "".join(out)
 
     # header
+    header_parts = [
+        justify(h, w, f.header_align if f.header_align is not None else f.align)
+        for h, w, f in zip(headers, widths, fields)
+    ]
     log.info(
         join_columns(
-            [h.ljust(w) for h, w in zip(headers, widths)],
+            header_parts,
             header_column_separators,
         )
     )
@@ -139,7 +166,7 @@ def render_table[*Ts](
                     line = ""
 
                 raw_parts.append(line)
-                padded_parts.append(line.ljust(widths[col]))
+                padded_parts.append(justify(line, widths[col], f.align))
 
             log.info(
                 join_columns(
