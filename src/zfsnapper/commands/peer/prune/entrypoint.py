@@ -171,7 +171,7 @@ def sync_peer_conn(
                 remove_peerings.add((d, p))
 
     if not remove_peerings:
-        log.info(_s() + f"No peers to remove")
+        log.info(_s() + f"No peerings to remove")
         return
 
     log.info(_s() + f"Found {len(remove_peerings)} peerings to remove:")
@@ -179,13 +179,13 @@ def sync_peer_conn(
         if p := get_peerinfo(ds, peering):
             log.info(_s(1) + f"{ds.path} {peering.direction.icon} {p.host}::{p.path}")
         else:
-            log.info(_s(1) + f"{ds.path} ―― unknown")
+            log.info(_s(1) + f"{ds.path} {peering.direction.icon} ?")
 
     if dry_run:
-        log.info(_s() + "Dry-run enabled, not removing any peers")
+        log.info(_s() + "Dry-run enabled, not removing any peerings")
         return
 
-    log.info(_s() + f"Removing peers")
+    log.info(_s() + f"Removing peerings")
     for i, (ds, peering) in enumerate(remove_peerings):
         remove_peer(cli=cli, dataset=ds, peering=peering, holds=holds, log_indent=2)
         log.info(_s(1) + f"{i+1}/{len(remove_peerings)} removed")
