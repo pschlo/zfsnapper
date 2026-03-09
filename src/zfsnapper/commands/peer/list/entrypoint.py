@@ -7,8 +7,8 @@ from zfsnapper.common.zfs import ZfsCli, Dataset
 from zfsnapper.common.resolve_datasets import ResolvedDatasets
 from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args, get_holds, get_peerinfo
 from zfsnapper.common.parse_dataset_arg import ConnSpec
-from zfsnapper.common.sort import sortkey_dataset
-from zfsnapper.common.utils import sort_dict
+from zfsnapper.common.sort import sortkey_dataset, sortkey_peering
+from zfsnapper.common.utils import sort_dict, space
 from zfsnapper.common.replication.utils import Direction, Peering
 from zfsnapper.common.render_table import render_table, Field, VERTICAL_BAR
 
@@ -51,7 +51,7 @@ def list_conn(conn: ConnSpec, datasets: ResolvedDatasets, cli: ZfsCli):
     ds_to_peers, ds_peer_to_holds = get_peers(snaps, holds, datasets)
 
     if not snaps:
-        log.info(f"No matching snapshots")
+        log.info(space(1) + f"No matching snapshots")
         return
 
     fields = [
@@ -66,9 +66,13 @@ def list_conn(conn: ConnSpec, datasets: ResolvedDatasets, cli: ZfsCli):
         ),
         Field("LAST USED", lambda d, peer: str(p.last_used) if (p := get_peerinfo(d, peer)) else "?")
     ]
-    peers = [(d, p) for d, ps in sort_dict(ds_to_peers, key=sortkey_dataset).items() for p in ps]
+    peers = [
+        (d, p)
+        for d, ps in sort_dict(ds_to_peers, key=sortkey_dataset).items()
+        for p in sorted(ps, key=sortkey_peering)
+    ]
     if not peers:
-        log.info("No matching peers")
+        log.info(space(1) + "No matching peers")
         return
 
     render_table(

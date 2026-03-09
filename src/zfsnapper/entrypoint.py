@@ -25,9 +25,10 @@ log = logging.getLogger(__name__)
 def cli():
     try:
         _entrypoint()
+    except KeyboardInterrupt:
+        sys.exit(130)
     except Exception as e:
         log.error(e)
-        # raise
         sys.exit(1)
 
 
