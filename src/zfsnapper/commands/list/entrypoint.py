@@ -48,7 +48,7 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, exten
         return
 
     fields = [
-        Field('SHORT NAME', lambda s: s.shortname),
+        Field('SHORTNAME', lambda s: s.shortname),
         Field('DATASET',    lambda s: str(s.dataset)),
         Field('TAGS',       lambda s: ','.join(sorted(s.tags)) if s.tags is not None else 'UNSET'),
         Field('TIMESTAMP',  lambda s: str(s.timestamp)),

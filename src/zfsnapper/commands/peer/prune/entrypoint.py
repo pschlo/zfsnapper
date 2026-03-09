@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 def entrypoint(args: Args) -> None:
     if not any([
         args.peer,
-        args.from_,
+        args.sync,
         args.unused_for,
         args.unheld,
         args.unknown,
@@ -42,8 +42,8 @@ def entrypoint(args: Args) -> None:
 
     sync_conns: set[ConnSpec] = set()
     sync_poolnames: set[tuple[ConnSpec, str]] = set()
-    for from_ in args.from_:
-        spec = parse_dataset_arg(from_)
+    for _sync_spec in args.sync:
+        spec = parse_dataset_arg(_sync_spec)
         if not spec.dataset:
             sync_conns.add(spec.conn)
         elif len(spec.dataset) == 1:

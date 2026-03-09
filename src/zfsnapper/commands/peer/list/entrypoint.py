@@ -55,7 +55,7 @@ def list_conn(conn: ConnSpec, datasets: ResolvedDatasets, cli: ZfsCli):
         return
 
     fields = [
-        Field("PATH", lambda d, p: str(d.path)),
+        Field("DATASET", lambda d, p: str(d.path)),
         Field("", lambda d, peer: peer.direction.icon),
         Field("PEER", lambda d, peer: str(p.host) if (p := get_peerinfo(d, peer)) else "?", align="right", header_align="left"),
         Field("", lambda d, peer: str(p.path) if (p := get_peerinfo(d, peer)) else "?"),
