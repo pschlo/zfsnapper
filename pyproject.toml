@@ -1,6 +1,6 @@
 [project]
 name = "zfsnapper"
-version = "1.6.12"
+version = "1.6.13"
 # description = "Add your description here"
 readme = "README.md"
 authors = [
