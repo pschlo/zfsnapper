@@ -43,7 +43,7 @@ def entrypoint(args: Args) -> None:
             rollback=args.rollback,
             src_conn=conn,
             dst_conn=dest_spec.conn,
-            plain_send=args.plain_send,
+            plain_send=args.plain,
             localhost=args.localhost
         )
 

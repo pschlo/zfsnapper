@@ -10,7 +10,7 @@ class Args(CommonArgs):
     dest: str
     init: bool
     rollback: bool
-    plain_send: bool
+    plain: bool
     localhost: str | None
 
 
@@ -18,5 +18,5 @@ def setup(parser: ArgumentParser) -> None:
     parser.add_argument('dest', metavar='USER@HOST:PORT::DATASET')
     parser.add_argument('--init', action='store_true')
     parser.add_argument('--rollback', action='store_true')
-    parser.add_argument('--plain-send', action='store_true')
+    parser.add_argument('--plain', action='store_true')
     parser.add_argument('--localhost', type=str)

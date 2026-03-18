@@ -245,7 +245,7 @@ class Dataset:
         path = Path(ps[P.NAME].value)
         guid = int(ps[P.GUID].value)
         type = ZfsDatasetType(ps[P.TYPE].value)
-        is_encrypted = ps[P.ENCRYPTION] != 'off'
+        is_encrypted = ps[P.ENCRYPTION].value != 'off'
 
         # Parse peer slots
         peer_slots_dict: dict[int, PeeringInfo | None] = {}
