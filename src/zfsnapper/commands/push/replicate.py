@@ -2,7 +2,7 @@ from __future__ import annotations
 import logging
 from typing import TypeAlias, Literal, TypeGuard, Any, overload
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, StrEnum
 from itertools import pairwise
 from datetime import datetime
 
@@ -29,6 +29,11 @@ def is_set[T](value: T | NotSet) -> TypeGuard[T]:
     return value is not NOT_SET
 
 
+class EncryptionMode(StrEnum):
+    KEEP = 'keep'
+    CLEAR = 'clear'
+
+
 @dataclass
 class DatasetSide:
     conn: ConnSpec
@@ -42,7 +47,7 @@ class DatasetSide:
     base_snap: Snapshot | None | NotSet = NOT_SET
 
 
-def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: bool, allow_init: bool, plain_send: bool, localhost: str | None, log_indent: int = 0):
+def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: bool, allow_init: bool, enc_mode: EncryptionMode, localhost: str | None, log_indent: int = 0):
     def _s(level: int = 0):
         return space(log_indent + level)
 
@@ -60,7 +65,7 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         if not allow_init:
             raise ReplicationError(f"Destination dataset '{dest.path}' does not exist and will not be created", log_indent=log_indent)
         # Do initial send-receive to create dest dataset.
-        transfer_initial(source, dest, snapshot=source.snaps[-1], plain_send=plain_send, log_indent=log_indent)
+        transfer_initial(source, dest, snapshot=source.snaps[-1], enc_mode=enc_mode, log_indent=log_indent)
 
         # Fetch the newly created dataset and set base snaps
         source.base_snap = source.snaps[-1]
@@ -111,10 +116,10 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
     update_peerinfo(cli=source.cli, dataset=source.dataset, peerinfo=create_peering_info(dest, Direction.SEND), localhost=localhost)
     update_peerinfo(cli=dest.cli, dataset=dest.dataset, peerinfo=create_peering_info(source, Direction.RECEIVE), localhost=localhost)
 
-    replicate_incrementally(source, dest, plain_send=plain_send, log_indent=log_indent)
+    replicate_incrementally(source, dest, enc_mode=enc_mode, log_indent=log_indent)
 
 
-def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot, plain_send: bool, log_indent: int = 0):
+def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot, enc_mode: EncryptionMode, log_indent: int = 0):
     """Perform a single initial send-receive, thereby creating the dest dataset."""
     def _s(level: int = 0):
         return space(log_indent + level)
@@ -138,12 +143,12 @@ def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot,
         snapshot=snapshot,
         base=None,
         properties=properties,
-        raw=source.dataset.is_encrypted and not plain_send,
+        raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
         log_indent=log_indent + 1
     )
 
 
-def replicate_incrementally(source: DatasetSide, dest: DatasetSide, plain_send: bool, log_indent: int = 0):
+def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: EncryptionMode, log_indent: int = 0):
     """Base snapshot must be held."""
     def _s(level: int = 0):
         return space(log_indent + level)
@@ -180,7 +185,7 @@ def replicate_incrementally(source: DatasetSide, dest: DatasetSide, plain_send: 
             dest_dataset=dest.path,
             snapshot=snap,
             base=base,
-            raw=source.dataset.is_encrypted and not plain_send,
+            raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
             log_indent=log_indent + 1
         )
 

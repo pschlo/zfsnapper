@@ -1,4 +1,5 @@
 from __future__ import annotations
+from typing import Literal, TYPE_CHECKING
 import logging
 
 from zfsnapper.common.replication import ReplicationError
@@ -9,14 +10,18 @@ from zfsnapper.common.sort import sortkey_dataset
 from zfsnapper.common.path import Path
 from zfsnapper.common.zfs import ZfsCli, Pool
 from zfsnapper.common.utils import group_by, space
-from .replicate import replicate, DatasetSide, NOT_SET
-from .args import Args
+from .replicate import replicate, DatasetSide, NOT_SET, EncryptionMode
+
+if TYPE_CHECKING:
+    from .args import Args
 
 
 log = logging.getLogger(__name__)
 
 
 def entrypoint(args: Args) -> None:
+    assert args.enc_mode in (EncryptionMode.KEEP, EncryptionMode.CLEAR)
+
     src_resolved = resolve_dataset_args(args)
     dest_spec = parse_dataset_arg(args.dest)
     if not dest_spec.dataset:
@@ -43,7 +48,7 @@ def entrypoint(args: Args) -> None:
             rollback=args.rollback,
             src_conn=conn,
             dst_conn=dest_spec.conn,
-            plain_send=args.plain,
+            enc_mode=args.enc_mode,
             localhost=args.localhost
         )
 
@@ -58,7 +63,7 @@ def push_conn(
     rollback: bool,
     src_conn: ConnSpec,
     dst_conn: ConnSpec,
-    plain_send: bool,
+    enc_mode: EncryptionMode,
     localhost: str | None
 ):
     """
@@ -129,7 +134,7 @@ def push_conn(
 
         try:
             log.info(_s(1) + f"Checking dataset: ~{f'/{relpath}' if relpath else ''}")
-            replicate(source, dest, relpath=relpath, rollback=rollback, allow_init=allow_init, plain_send=plain_send, localhost=localhost, log_indent=2)
+            replicate(source, dest, relpath=relpath, rollback=rollback, allow_init=allow_init, enc_mode=enc_mode, localhost=localhost, log_indent=2)
         except ReplicationError as e:
             is_error = True
             log.error(space(e.log_indent) + str(e))
