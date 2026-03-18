@@ -22,6 +22,7 @@ log = logging.getLogger(__name__)
 class PropertySource(StrEnum):
     NONE = "none"
     INHERITED = "inherited"
+    DEFAULT = "default"
     LOCAL = "local"
 
 
@@ -46,6 +47,8 @@ def parse_property_source(source: str) -> PropertySource:
         return PropertySource.LOCAL
     if source.startswith("inherited"):
         return PropertySource.INHERITED
+    if source == "default":
+        return PropertySource.DEFAULT
     raise ValueError(f"Invalid property source")
 
 
@@ -93,6 +96,7 @@ REQUIRED_DATASET_PROPS = [
     ZfsProperty.NAME,
     ZfsProperty.GUID,
     ZfsProperty.TYPE,
+    ZfsProperty.ENCRYPTION
 ]
 
 
