@@ -21,11 +21,16 @@ log = logging.getLogger(__name__)
 def resolve_dataset_args(
     args: CommonArgs | None = None,
     *,
+
+    # Override args
     include_exact: Collection[str] = [],
     include_recurse: Collection[str] = [],
     exclude_exact: Collection[str] = [],
     exclude_recurse: Collection[str] = [],
     strict: bool | None = None,
+
+    # Other args
+    default_all_local: bool = False  # If no datasets, default to all datasets
 ):
     """Shorthand function for parsing dataset args."""
     def _parse(raw_specs: Collection[str]):
@@ -38,6 +43,7 @@ def resolve_dataset_args(
             exclude_exact=_parse(exclude_exact or (args.exc_dataset_exact if args else [])),
             exclude_recurse=_parse(exclude_recurse or (args.exc_dataset_recurse if args else [])),
             strict=strict if strict is not None else (args.strict if args else False),
+            default_all_local=default_all_local
         )
     )
 

@@ -28,7 +28,7 @@ def entrypoint(args: Args):
     """
     List all peers
     """
-    resolved = resolve_dataset_args(args)
+    resolved = resolve_dataset_args(args, default_all_local=True)
 
     _first = True
     for conn, (datasets, cli) in resolved.items():

@@ -10,7 +10,6 @@ from zfsnapper.common.utils import space
 
 from .exception import ReplicationError
 
-Holdtag = str | Callable[[Dataset], str]
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +31,7 @@ def send_receive(
     dest_dataset: Path,
     snapshot: Snapshot,
     base: Snapshot | None,
+    raw: bool,
     properties: dict[str, str] = {},
     log_indent: int = 0
 ) -> None:
@@ -49,7 +49,7 @@ def send_receive(
 
     try:
         # 1) Start sender: stdout=PIPE for data, stderr=PIPE for progress
-        send_proc = src_cli.send_snapshot_async(snapshot.longname, base.longname if base else None)
+        send_proc = src_cli.send_snapshot_async(snapshot.longname, raw=raw, base_fullname=base.longname if base else None)
         assert send_proc.stdout is not None
         assert send_proc.stderr is not None
 

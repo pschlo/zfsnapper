@@ -19,7 +19,7 @@ Field = Field[Snapshot]
 
 
 def entrypoint(args: Args) -> None:
-    resolved = resolve_dataset_args(args)
+    resolved = resolve_dataset_args(args, default_all_local=True)
     filter = resolve_filter_args(tag_groups=args.tag)
 
     # For each dataset, get all snapshots non-recursively

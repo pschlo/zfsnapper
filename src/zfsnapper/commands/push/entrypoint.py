@@ -43,6 +43,7 @@ def entrypoint(args: Args) -> None:
             rollback=args.rollback,
             src_conn=conn,
             dst_conn=dest_spec.conn,
+            plain_send=args.plain_send,
             localhost=args.localhost
         )
 
@@ -57,6 +58,7 @@ def push_conn(
     rollback: bool,
     src_conn: ConnSpec,
     dst_conn: ConnSpec,
+    plain_send: bool,
     localhost: str | None
 ):
     """
@@ -127,7 +129,7 @@ def push_conn(
 
         try:
             log.info(_s(1) + f"Checking dataset: ~{f'/{relpath}' if relpath else ''}")
-            replicate(source, dest, relpath=relpath, rollback=rollback, allow_init=allow_init, localhost=localhost, log_indent=2)
+            replicate(source, dest, relpath=relpath, rollback=rollback, allow_init=allow_init, plain_send=plain_send, localhost=localhost, log_indent=2)
         except ReplicationError as e:
             is_error = True
             log.error(space(e.log_indent) + str(e))

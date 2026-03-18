@@ -44,6 +44,7 @@ def resolve_dataset_specs(
     exclude_exact: Collection[DatasetSpec] = [],
     exclude_recurse: Collection[DatasetSpec] = [],
     strict: bool = False,
+    default_all_local: bool = False
 ) -> tuple[
     dict[ConnSpec, ResolvedDatasets],
     dict[ConnSpec, ZfsCli]
@@ -60,6 +61,13 @@ def resolve_dataset_specs(
     # Collect all appearing connections.
     inc_conns = _include_exact_grouped.keys() | _include_recurse_grouped.keys()
     exc_conns = _exclude_exact_grouped.keys() | _exclude_recurse_grouped.keys()
+
+    # Default to all local datasets
+    if not inc_conns and not exc_conns and default_all_local:
+        _conn = ConnSpec(host=None, user=None, port=None)
+        inc_conns.add(_conn)
+        _include_recurse_grouped[_conn] = [Path()]
+
     if not inc_conns:
         raise ValueError(f"No dataset locations specified")
     if diff := exc_conns - inc_conns:

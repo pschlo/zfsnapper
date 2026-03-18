@@ -59,6 +59,7 @@ class ZfsProperty:
     MOUNTPOINT = 'mountpoint'
     CANMOUNT = 'canmount'
     TYPE = 'type'
+    ENCRYPTION = 'encryption'
     CUSTOM_TAGS = 'zfsnapper:tags'  # the user property used to store and read tags
 
 
@@ -222,6 +223,7 @@ class Dataset:
     path: Path
     guid: int
     type: ZfsDatasetType
+    is_encrypted: bool
     peerinfos: list[PeeringInfo | None]
 
     def __repr__(self) -> str:
@@ -239,6 +241,7 @@ class Dataset:
         path = Path(ps[P.NAME].value)
         guid = int(ps[P.GUID].value)
         type = ZfsDatasetType(ps[P.TYPE].value)
+        is_encrypted = ps[P.ENCRYPTION] != 'off'
 
         # Parse peer slots
         peer_slots_dict: dict[int, PeeringInfo | None] = {}
@@ -279,6 +282,7 @@ class Dataset:
             path=path,
             guid=guid,
             type=type,
+            is_encrypted=is_encrypted,
             peerinfos=peerinfo_slots
         )
 
@@ -308,8 +312,10 @@ class ZfsCli(ABC):
             raise CalledProcessError(p.returncode, cmd=p.args, output=stdout)
         return stdout
 
-    def send_snapshot_async(self, snapshot_fullname: str, base_fullname: Optional[str] = None) -> Popen[bytes]:
+    def send_snapshot_async(self, snapshot_fullname: str, raw: bool, base_fullname: Optional[str] = None) -> Popen[bytes]:
         cmd = ['zfs', 'send', '-v']
+        if raw:
+            cmd += ['--raw']
         if base_fullname:
             cmd += ['-i', base_fullname]
         cmd += [snapshot_fullname]
