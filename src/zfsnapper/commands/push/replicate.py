@@ -47,6 +47,8 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         return space(log_indent + level)
 
     assert is_set(source.dataset) and is_set(source.snaps)
+    if not source.snaps:
+        raise ReplicationError(f"Source '{source.path}' has no snapshots")
 
     # Ensure sorting
     source.snaps.sort(key=sortkey_snap_by_time, reverse=True)
