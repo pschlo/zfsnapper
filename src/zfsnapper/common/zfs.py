@@ -550,6 +550,7 @@ class ZfsCli(ABC):
 
 class LocalZfsCli(ZfsCli):
     def _start_command(self, cmd: list[str], stdin=None, stdout=None, stderr=None, text=False) -> Popen:
+        log.debug(f"Running local command: {' '.join(cmd)}")
         return Popen(cmd, stdin=stdin, stdout=stdout, stderr=stderr, text=text)
 
 
@@ -573,6 +574,7 @@ class RemoteZfsCli(ZfsCli):
         self.ssh_command = cmd
 
     def _start_command(self, cmd: list[str], stdin=None, stdout=None, stderr=None, text=False) -> Popen:
+        log.debug(f"Running ssh command: {' '.join(cmd)}")
         remote_cmd = ' '.join(shlex.quote(arg) for arg in cmd)
         return Popen(
             self.ssh_command + [remote_cmd],

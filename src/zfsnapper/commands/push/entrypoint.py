@@ -146,7 +146,7 @@ def push_conn(
 
                 if _consecutive_fails >= 3:
                     # We did not make any progress three times in a row; give up
-                    log.error(_s(2) + f"Replication failed three times in a row without making progress; giving up")
+                    log.info(_s(2) + f"Replication failed three times in a row without making progress; giving up")
                     raise ReplicationError(f"Replication failed for dataset: {source.path}")
 
                 # Keep trying; refetch all snapshots and retry this dataset
@@ -155,7 +155,6 @@ def push_conn(
                 continue
 
             assert False
-
 
 
 def create_pairs(
@@ -172,10 +171,7 @@ def create_pairs(
     relpath_to_paths: dict[Path, tuple[Path, Path]],
     missing_dest_paths: set[Path]
 ) -> dict[Path, tuple[DatasetSide, DatasetSide]]:
-    """Fetch source + dest snapshots and create dataset sides.
-
-    src_datasets.matched == [p[1].dataset for p in pairs]
-    """
+    """Fetch source + dest snapshots and create dataset sides."""
     # Fetch all snapshots.
     srcpath_to_snaps = group_by(
         fetch_snaps(cli=src_cli, datasets=src_datasets),
