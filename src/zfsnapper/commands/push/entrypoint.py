@@ -98,22 +98,32 @@ def push_conn(
     missing_dest_paths = set(_expected_dest_paths) - dest_datasets.p.matched
 
     # Create closure
-    _create_pairs = lambda: create_pairs(
-        src_cli=src_cli,
-        dest_cli=dest_cli,
-        src_datasets=src_datasets,
-        dest_datasets=dest_datasets,
-        dest_root=dest_root,
-        src_root=src_root,
-        src_pools=src_pools,
-        dest_pool=dest_pool,
-        src_conn=src_conn,
-        dst_conn=dst_conn,
-        relpath_to_paths=relpath_to_paths,
-        missing_dest_paths=missing_dest_paths
-    )
+    def _create_pairs(skip_relpaths: set[Path] = set()):
+        # Filter relpaths
+        _relpath_to_paths = {
+            relpath: paths
+            for relpath, paths in relpath_to_paths.items()
+            if relpath not in skip_relpaths
+        }
+
+        return create_pairs(
+            src_cli=src_cli,
+            dest_cli=dest_cli,
+            src_datasets=src_datasets,
+            dest_datasets=dest_datasets,
+            dest_root=dest_root,
+            src_root=src_root,
+            src_pools=src_pools,
+            dest_pool=dest_pool,
+            src_conn=src_conn,
+            dst_conn=dst_conn,
+
+            relpath_to_paths=_relpath_to_paths,
+            missing_dest_paths=missing_dest_paths
+        )
 
     pairs = _create_pairs()
+    completed_relpaths: set[Path] = set()
     for relpath in relpath_to_paths.keys():
         _consecutive_fails: int = 0
 
@@ -132,6 +142,7 @@ def push_conn(
                     localhost=localhost,
                     log_indent=2
                 )
+                completed_relpaths.add(relpath)
                 break
 
             except ReplicationError as e:
@@ -150,12 +161,11 @@ def push_conn(
                     raise ReplicationError(f"Replication failed for dataset: {source.path}")
 
                 # Keep trying; refetch all snapshots and retry this dataset
-                pairs = _create_pairs()
                 log.info(_s(2) + f"Retrying")
+                pairs = _create_pairs(skip_relpaths=completed_relpaths)
                 continue
 
             assert False
-
 
 
 def create_pairs(
