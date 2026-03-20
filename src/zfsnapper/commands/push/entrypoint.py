@@ -150,8 +150,8 @@ def push_conn(
                     raise ReplicationError(f"Replication failed for dataset: {source.path}")
 
                 # Keep trying; refetch all snapshots and retry this dataset
-                pairs = _create_pairs()
                 log.info(_s(2) + f"Retrying")
+                pairs = _create_pairs()
                 continue
 
             assert False
