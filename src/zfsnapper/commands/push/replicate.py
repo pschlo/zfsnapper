@@ -58,6 +58,9 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
     # Ensure sorting
     source.snaps.sort(key=sortkey_snap_by_time, reverse=True)
 
+    # Flag to store whether we have just created/initialized the destination dataset
+    just_created_dest: bool
+
     if not is_set(dest.dataset) or not is_set(dest.snaps):
         assert not is_set(dest.dataset) and not is_set(dest.snaps)
 
@@ -83,7 +86,11 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         dest.cli.hold([dest.base_snap.longname], dest.holdtag)
         dest.base_snap.num_holds += 1
 
+        just_created_dest = True
+
     else:
+        just_created_dest = False
+
         # Ensure sorting
         dest.snaps.sort(key=sortkey_snap_by_time, reverse=True)
 
@@ -116,7 +123,13 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
     update_peerinfo(cli=source.cli, dataset=source.dataset, peerinfo=create_peering_info(dest, Direction.SEND), localhost=localhost)
     update_peerinfo(cli=dest.cli, dataset=dest.dataset, peerinfo=create_peering_info(source, Direction.RECEIVE), localhost=localhost)
 
-    replicate_incrementally(source, dest, enc_mode=enc_mode, log_indent=log_indent)
+    try:
+        replicate_incrementally(source, dest, enc_mode=enc_mode, log_indent=log_indent)
+    except ReplicationError as e:
+        # Note that we have also sent an initial snapshot
+        if just_created_dest:
+            e.snaps_sent += 1
+        raise e
 
 
 def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot, enc_mode: EncryptionMode, log_indent: int = 0):
@@ -179,30 +192,36 @@ def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: En
     for i, (base, snap) in enumerate(pairwise(transfer_sequence)):
         log.info(_s() + f"Transferring snapshot [{i+1}/{total}]: {snap.shortname}")
 
-        # Transfer snapshot
-        send_receive(
-            clis=(source.cli, dest.cli),
-            dest_dataset=dest.path,
-            snapshot=snap,
-            base=base,
-            raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
-            log_indent=log_indent + 1
-        )
+        try:
+            # Transfer snapshot
+            send_receive(
+                clis=(source.cli, dest.cli),
+                dest_dataset=dest.path,
+                snapshot=snap,
+                base=base,
+                raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
+                log_indent=log_indent + 1
+            )
 
-        # Determine dest snaps
-        dest_base = base.with_dataset(dest.path)
-        dest_snap = snap.with_dataset(dest.path)
-        dest.snaps.insert(0, dest_snap)
+            # Determine dest snaps
+            dest_base = base.with_dataset(dest.path)
+            dest_snap = snap.with_dataset(dest.path)
+            dest.snaps.insert(0, dest_snap)
 
-        # Update holds
-        source.cli.hold([snap.longname], source.holdtag)
-        snap.num_holds += 1
-        dest.cli.hold([dest_snap.longname], dest.holdtag)
-        dest_snap.num_holds += 1
-        source.cli.release_hold([base.longname], source.holdtag)
-        base.num_holds -= 1
-        dest.cli.release_hold([dest_base.longname], dest.holdtag)
-        dest_base.num_holds -= 1
+            # Update holds
+            source.cli.hold([snap.longname], source.holdtag)
+            snap.num_holds += 1
+            dest.cli.hold([dest_snap.longname], dest.holdtag)
+            dest_snap.num_holds += 1
+            source.cli.release_hold([base.longname], source.holdtag)
+            base.num_holds -= 1
+            dest.cli.release_hold([dest_base.longname], dest.holdtag)
+            dest_base.num_holds -= 1
+
+        except ReplicationError as e:
+            # Store how many snapshots were sent successfully and re-raise
+            e.snaps_sent = i
+            raise e
 
     dest.snaps = [s.with_dataset(dest.path) for s in reversed(transfer_sequence[1:])] + dest.snaps
 

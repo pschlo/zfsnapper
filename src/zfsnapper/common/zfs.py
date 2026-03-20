@@ -559,7 +559,12 @@ class RemoteZfsCli(ZfsCli):
     def __init__(self, host: str, user: Optional[str], port: Optional[int]) -> None:
         super().__init__()
 
-        cmd = ['ssh']
+        cmd = [
+            "ssh",
+            "-o", "ControlMaster=auto",
+            "-o", "ControlPersist=5m",
+            "-o", "ControlPath=~/.ssh/cm-%C",
+        ]
         if user is not None:
             cmd += ['-l', user]
         if port is not None:
