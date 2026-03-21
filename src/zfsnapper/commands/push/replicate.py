@@ -3,7 +3,7 @@ import logging
 from typing import TypeAlias, Literal, TypeGuard, Any, overload
 from dataclasses import dataclass
 from enum import Enum, StrEnum
-from itertools import pairwise
+from itertools import pairwise, batched
 from datetime import datetime
 
 from zfsnapper.common.replication import ReplicationError
@@ -99,7 +99,7 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         dest.holdtag = Peering(Direction.RECEIVE, source.dataset.guid).to_tag()
 
         # Determine base snap
-        source.base_snap, dest.base_snap = determine_latest_common(source, dest)
+        source.base_snap, dest.base_snap = find_latest_common(source, dest)
 
         # Check holds
         ensure_holds(source, dest, log_indent=log_indent)
@@ -126,7 +126,7 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
     try:
         replicate_incrementally(source, dest, enc_mode=enc_mode, log_indent=log_indent)
     except ReplicationError as e:
-        # Note that we have also sent an initial snapshot
+        # Annotate that we have also sent an initial snapshot
         if just_created_dest:
             e.snaps_sent += 1
         raise e
@@ -161,6 +161,8 @@ def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot,
     )
 
 
+GROUP_SIZE = 5
+
 def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: EncryptionMode, log_indent: int = 0):
     """Base snapshot must be held."""
     def _s(level: int = 0):
@@ -174,56 +176,92 @@ def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: En
 
     base_index = next(i for i, s in enumerate(source.snaps) if s.guid == source.base_snap.guid)
 
-    # Determine sequence of source snapshots to transfer.
+    # Determine sequence of planned transfers as (from_source_snap, to_source_snap) tuples
     # Default: transfer all source snapshots from common base to latest.
-    transfer_sequence = list(reversed(source.snaps[:base_index+1]))
+    transfer_sequence = list(pairwise(reversed(source.snaps[:base_index+1])))
 
-    # must at least contain a base snapshot
-    assert transfer_sequence
-    if len(transfer_sequence) <= 1:
+    if not transfer_sequence:
         log.info(_s() + f"Already up to date")
         return
 
     # Check for timestamp conflicts
     check_timestamp_conflicts(source, dest, transfer_sequence=transfer_sequence, log_indent=log_indent)
 
-    total = len(transfer_sequence) - 1
+    # Partition transfer sequence into groups
+    transfer_groups = list(batched(transfer_sequence, GROUP_SIZE))
+
+    total = len(transfer_sequence)
     log.info(_s() + f"Destination is {total} snapshots behind")
-    for i, (base, snap) in enumerate(pairwise(transfer_sequence)):
-        log.info(_s() + f"Transferring snapshot [{i+1}/{total}]: {snap.shortname}")
-
+    snaps_sent = 0
+    for group in transfer_groups:
         try:
-            # Transfer snapshot
-            send_receive(
-                clis=(source.cli, dest.cli),
-                dest_dataset=dest.path,
-                snapshot=snap,
-                base=base,
-                raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
-                log_indent=log_indent + 1
-            )
-
-            # Determine dest snaps
-            dest_base = base.with_dataset(dest.path)
-            dest_snap = snap.with_dataset(dest.path)
-            dest.snaps.insert(0, dest_snap)
-
-            # Update holds
-            source.cli.hold([snap.longname], source.holdtag)
-            snap.num_holds += 1
-            dest.cli.hold([dest_snap.longname], dest.holdtag)
-            dest_snap.num_holds += 1
-            source.cli.release_hold([base.longname], source.holdtag)
-            base.num_holds -= 1
-            dest.cli.release_hold([dest_base.longname], dest.holdtag)
-            dest_base.num_holds -= 1
-
+           for _ in _transfer_group(
+                group,
+                source,
+                dest,
+                enc_mode=enc_mode,
+                snaps_sent=snaps_sent,
+                total=total,
+                log_indent=log_indent
+            ):
+               snaps_sent += 1
         except ReplicationError as e:
-            # Store how many snapshots were sent successfully and re-raise
-            e.snaps_sent = i
-            raise e
+            # Annotate how many snapshots were sent successfully and re-raise
+            e.snaps_sent = snaps_sent
+            raise
 
-    dest.snaps = [s.with_dataset(dest.path) for s in reversed(transfer_sequence[1:])] + dest.snaps
+
+def _transfer_group(group: tuple[tuple[Snapshot, Snapshot], ...], source: DatasetSide, dest: DatasetSide, enc_mode: EncryptionMode, snaps_sent: int, total: int, log_indent: int = 0):
+    """
+    Transfer full group.
+
+    - First group snap must be held
+    - After, the last group snap is held
+    """
+    assert is_set(dest.snaps)
+    assert is_set(source.dataset)
+    assert is_set(source.holdtag) and is_set(dest.holdtag)
+
+    def _s(level: int = 0):
+        return space(log_indent + level)
+
+    for base, snap in group:
+        log.info(_s() + f"Transferring snapshot [{snaps_sent+1}/{total}]: {snap.shortname}")
+
+        # Transfer snapshot
+        send_receive(
+            clis=(source.cli, dest.cli),
+            dest_dataset=dest.path,
+            snapshot=snap,
+            base=base,
+            raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
+            log_indent=log_indent + 1
+        )
+
+        # We have created a snapshot on the dest
+        dest_snap = snap.with_dataset(dest.path)
+        dest.snaps.insert(0, dest_snap)
+        snaps_sent += 1
+        yield
+
+    # Group has been sent.
+    # Determine first and last group snapshot.
+    group_first = group[0][0]
+    group_last = group[-1][1]
+    group_first_dest = next(iter(s for s in dest.snaps if s.guid == group_first.guid))
+    group_last_dest = next(iter(s for s in dest.snaps if s.guid == group_last.guid))
+
+    # Update holds on first snap in group
+    source.cli.hold([group_last.longname], source.holdtag)
+    group_last.num_holds += 1
+    dest.cli.hold([group_last_dest.longname], dest.holdtag)
+    group_last_dest.num_holds += 1
+
+    # Update holds on last snap in group
+    source.cli.release_hold([group_first.longname], source.holdtag)
+    group_first.num_holds -= 1
+    dest.cli.release_hold([group_first_dest.longname], dest.holdtag)
+    group_first_dest.num_holds -= 1
 
 
 def create_peering_info(side: DatasetSide, direction: Direction):
@@ -240,9 +278,9 @@ def create_peering_info(side: DatasetSide, direction: Direction):
     )
 
 
-def check_timestamp_conflicts(source: DatasetSide, dest: DatasetSide, transfer_sequence: list[Snapshot], log_indent: int = 0):
+def check_timestamp_conflicts(source: DatasetSide, dest: DatasetSide, transfer_sequence: list[tuple[Snapshot, Snapshot]], log_indent: int = 0):
     # Find snapshot that cannot be transferred because their timestamp equals their predecessor
-    for i, (a, b) in enumerate(pairwise(transfer_sequence)):
+    for a, b in transfer_sequence:
         if a.timestamp == b.timestamp:
             # Snapshot B cannot be sent
             raise ReplicationError(
@@ -317,7 +355,7 @@ def ensure_holds(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
     _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), current_holdtags=holds, log_indent=log_indent)
 
 
-def determine_latest_common(source: DatasetSide, dest: DatasetSide) -> tuple[Snapshot, Snapshot] | tuple[None, None]:
+def find_latest_common(source: DatasetSide, dest: DatasetSide) -> tuple[Snapshot, Snapshot] | tuple[None, None]:
     """Finds the latest snapshot that exists on both sides."""
     assert is_set(source.snaps) and is_set(dest.snaps)
 

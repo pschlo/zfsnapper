@@ -35,11 +35,7 @@ def send_receive(
     properties: dict[str, str] = {},
     log_indent: int = 0
 ) -> None:
-    """
-    Perform a single send-receive.
-    
-    If base is given, it must have a hold.
-    """
+    """Perform a single send-receive."""
     def _s(level: int = 0):
         return space(log_indent + level)
 
