@@ -63,7 +63,7 @@ class ZfsProperty(StrEnum):
     CANMOUNT = 'canmount'
     TYPE = 'type'
     ENCRYPTION = 'encryption'
-    CUSTOM_TAGS = 'zfsnapper:tags'  # the user property used to store and read tags
+    ZFSNAPPER_TAGS = 'zfsnapper:tags'  # the user property used to store and read tags
     SHARENFS = 'sharenfs'
     SHARESMB = 'sharesmb'
     QUOTA = 'quota'
@@ -111,7 +111,7 @@ REQUIRED_SNAP_PROPS = [
     ZfsProperty.NAME,
     ZfsProperty.CREATION,
     ZfsProperty.GUID,
-    ZfsProperty.CUSTOM_TAGS,
+    ZfsProperty.ZFSNAPPER_TAGS,
     ZfsProperty.USERREFS,
 ]
 
@@ -149,10 +149,10 @@ class Snapshot:
         timestamp = datetime.fromtimestamp(int(ps[P.CREATION]))
         num_holds = int(ps[P.USERREFS])
 
-        if ps[P.CUSTOM_TAGS] == '-':
+        if ps[P.ZFSNAPPER_TAGS] == '-':
             tags = None
         else:
-            tags = frozenset(t for t in ps[P.CUSTOM_TAGS].split(',') if t)  # ignore empty tags
+            tags = frozenset(t for t in ps[P.ZFSNAPPER_TAGS].split(',') if t)  # ignore empty tags
 
         return cls(
             dataset=dataset,
@@ -569,7 +569,7 @@ class ZfsCli(ABC):
         self._run_text_command(cmd)
 
     def set_snapshot_tags(self, snap_fullname: str, tags: Collection[str]):
-        props = {str(ZfsProperty.CUSTOM_TAGS): ','.join(tags)}
+        props = {str(ZfsProperty.ZFSNAPPER_TAGS): ','.join(tags)}
         self.set_properties(snap_fullname, props)
 
     def destroy_snapshots(self, dataset: Path | str, snapshots_shortnames: Collection[str]) -> None:

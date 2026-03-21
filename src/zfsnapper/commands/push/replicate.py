@@ -103,14 +103,10 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         source.holdtag = Peering(Direction.SEND, dest.dataset.guid).to_tag()
         dest.holdtag = Peering(Direction.RECEIVE, source.dataset.guid).to_tag()
 
-        # Find latest held on dest.
-        # This is representative of up to where replication was completely finished (e.g. tags set)
-        latest_held_dest = next(iter(i for i, s in enumerate(dest.snaps) if dest.holdtag in dest.holds[s]), None)
-
         # Determine base snap
         source.base_snap, dest.base_snap = find_latest_common(source, dest)
 
-        # Fix holds
+        # Optimize holds
         ensure_holds(source, dest, log_indent=log_indent)
 
         # figure out base index
@@ -119,15 +115,16 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         if dest.base_snap.guid != dest.snaps[0].guid:
             raise ReplicationError(f"Destination '{dest.path}' has snapshots newer than latest common snapshot '{dest.base_snap.shortname}'", log_indent=log_indent)
 
-        # Try to repair unset tags.
-        # For each snap after latest hold that has tags UNSET on dest but set on source, update tags.
-        if latest_held_dest is not None:
-            for dest_snap in dest.snaps[:latest_held_dest]:
-                repair_tags(
-                    dest_snap,
-                    source_snaps=source.snaps,
-                    dest_cli=dest.cli
-                )
+        # Try to repair all snaps with unset tags.
+        # For each snap that has tags set on source but UNSET on dest, set on dest.
+        _src_guid_to_snap = {s.guid: s for s in source.snaps}
+        for dest_snap in dest.snaps:
+            repair_tags(
+                dest_snap,
+                src_guid_to_snap=_src_guid_to_snap,
+                dest_cli=dest.cli,
+                log_indent=log_indent
+            )
 
         # Optionally rollback dest
         if rollback:
@@ -353,7 +350,7 @@ def check_timestamp_conflicts(source: DatasetSide, dest: DatasetSide, transfer_s
             )
 
 
-def repair_tags(dest_snap: Snapshot, source_snaps: list[Snapshot], dest_cli: ZfsCli, log_indent: int = 0):
+def repair_tags(dest_snap: Snapshot, src_guid_to_snap: dict[int, Snapshot], dest_cli: ZfsCli, log_indent: int = 0):
     def _s(level: int = 0):
         return space(log_indent + level)
 
@@ -361,7 +358,7 @@ def repair_tags(dest_snap: Snapshot, source_snaps: list[Snapshot], dest_cli: Zfs
         # Tags are already set
         return
 
-    src_snap = next(iter(s for s in source_snaps if s.guid == dest_snap.guid), None)
+    src_snap = src_guid_to_snap.get(dest_snap.guid)
     if src_snap is None:
         # There is no corresponding source snapshot to copy tags from
         return
@@ -370,7 +367,7 @@ def repair_tags(dest_snap: Snapshot, source_snaps: list[Snapshot], dest_cli: Zfs
         # Source snapshot does not have tags set
         return
 
-    log.info(_s() + f"Adding {len(src_snap.tags)} missing tags to snapshot '{dest_snap.shortname}' on destination")
+    log.info(_s() + f"Adding {len(src_snap.tags)} missing tags to destination snapshot: {dest_snap.shortname}")
     dest_cli.set_snapshot_tags(dest_snap.longname, src_snap.tags)
     dest_snap.tags = frozenset(src_snap.tags)
 

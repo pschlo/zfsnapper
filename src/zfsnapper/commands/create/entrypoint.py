@@ -35,7 +35,7 @@ def entrypoint(args: Args) -> None:
             datasets=datasets.p.matched,
             shortname=shortname,
             properties={
-                ZfsProperty.CUSTOM_TAGS: ','.join(args.tag)
+                ZfsProperty.ZFSNAPPER_TAGS: ','.join(args.tag)
             }
         )
 
