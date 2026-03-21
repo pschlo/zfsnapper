@@ -12,8 +12,8 @@ from zfsnapper.common.command_utils import update_peerinfo, get_holds
 from zfsnapper.common.parse_dataset_arg import ConnSpec
 from zfsnapper.common.path import Path
 from zfsnapper.common.sort import sortkey_snap_by_time
-from zfsnapper.common.zfs import ZfsCli, Dataset, PeeringInfo, Snapshot, ZfsDatasetType, ZfsProperty, Pool
-from zfsnapper.common.utils import space
+from zfsnapper.common.zfs import ZfsCli, Dataset, PeeringInfo, Snapshot, ZfsDatasetType, ZfsProperty, Pool, EXCLUDABLE_RECEIVE_PROPS
+from zfsnapper.common.utils import space, is_subsequence
 from zfsnapper.common.replication.utils import Direction, Peering
 
 
@@ -47,7 +47,7 @@ class DatasetSide:
     base_snap: Snapshot | None | NotSet = NOT_SET
 
 
-def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: bool, allow_init: bool, enc_mode: EncryptionMode, localhost: str | None, log_indent: int = 0):
+def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: bool, allow_init: bool, enc_mode: EncryptionMode, batch_size: int, localhost: str | None, log_indent: int = 0):
     def _s(level: int = 0):
         return space(log_indent + level)
 
@@ -124,7 +124,7 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
     update_peerinfo(cli=dest.cli, dataset=dest.dataset, peerinfo=create_peering_info(source, Direction.RECEIVE), localhost=localhost)
 
     try:
-        replicate_incrementally(source, dest, enc_mode=enc_mode, log_indent=log_indent)
+        replicate_incrementally(source, dest, enc_mode=enc_mode, batch_size=batch_size, log_indent=log_indent)
     except ReplicationError as e:
         # Annotate that we have also sent an initial snapshot
         if just_created_dest:
@@ -150,20 +150,23 @@ def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot,
         }
 
     log.info(_s() + f"Creating destination dataset by transferring oldest snapshot")
-    send_receive(
-        clis=(source.cli, dest.cli),
-        dest_dataset=dest.path,
-        snapshot=snapshot,
+    _send_receive(
+        source, dest,
+        snap=snapshot,
         base=None,
+        include_intermediates=False,
+        enc_mode=enc_mode,
         override_props=properties,
-        raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
-        log_indent=log_indent + 1
+        log_indent=log_indent + 1,
     )
 
 
-GROUP_SIZE = 5
+"""
+- at all times, at least one common held anchor exists on both sides
+- that anchor may lag behind the latest common snapshot by up to batch_size - 1 snapshots
+"""
 
-def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: EncryptionMode, log_indent: int = 0):
+def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: EncryptionMode, batch_size: int, log_indent: int = 0):
     """Base snapshot must be held."""
     def _s(level: int = 0):
         return space(log_indent + level)
@@ -187,36 +190,36 @@ def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: En
     # Check for timestamp conflicts
     check_timestamp_conflicts(source, dest, transfer_sequence=transfer_sequence, log_indent=log_indent)
 
-    # Partition transfer sequence into groups
-    transfer_groups = list(batched(transfer_sequence, GROUP_SIZE))
+    # Partition transfer sequence into batches
+    transfer_batches = list(batched(transfer_sequence, batch_size))
 
     total = len(transfer_sequence)
     log.info(_s() + f"Destination is {total} snapshots behind")
     snaps_sent = 0
-    for group in transfer_groups:
+    for batch in transfer_batches:
+        _progress = f"{snaps_sent+1}-{snaps_sent+len(batch)}/{total}" if len(batch) > 1 else f"{snaps_sent+1}/{total}"
+        log.info(_s() + f"Transferring {len(batch)} snapshots [{_progress}]")
         try:
-           for _ in _transfer_group(
-                group,
+           _transfer_batch(
+                batch,
                 source,
                 dest,
                 enc_mode=enc_mode,
-                snaps_sent=snaps_sent,
-                total=total,
                 log_indent=log_indent
-            ):
-               snaps_sent += 1
+            )
+           snaps_sent += len(batch)
         except ReplicationError as e:
             # Annotate how many snapshots were sent successfully and re-raise
             e.snaps_sent = snaps_sent
             raise
 
 
-def _transfer_group(group: tuple[tuple[Snapshot, Snapshot], ...], source: DatasetSide, dest: DatasetSide, enc_mode: EncryptionMode, snaps_sent: int, total: int, log_indent: int = 0):
+def _transfer_batch(batch: tuple[tuple[Snapshot, Snapshot], ...], source: DatasetSide, dest: DatasetSide, enc_mode: EncryptionMode, log_indent: int = 0):
     """
-    Transfer full group.
+    Transfer full batch.
 
-    - First group snap must be held
-    - After, the last group snap is held
+    - First batch snap must be held
+    - After, the last batch snap is held
     """
     assert is_set(source.snaps) and is_set(dest.snaps)
     assert is_set(source.dataset)
@@ -225,43 +228,67 @@ def _transfer_group(group: tuple[tuple[Snapshot, Snapshot], ...], source: Datase
     def _s(level: int = 0):
         return space(log_indent + level)
 
-    for base, snap in group:
-        log.info(_s() + f"Transferring snapshot [{snaps_sent+1}/{total}]: {snap.shortname}")
+    batch_first = batch[0][0]
+    batch_last = batch[-1][1]
 
-        # Transfer snapshot
-        send_receive(
-            clis=(source.cli, dest.cli),
-            dest_dataset=dest.path,
-            snapshot=snap,
-            base=base,
-            raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
-            log_indent=log_indent + 1
-        )
+    # Determine whether snapshots in the batch are consecutive
+    _snaps = [batch_first] + [p[1] for p in batch]
+    is_consecutive = is_subsequence(list(reversed(_snaps)), source.snaps)
 
-        # We have created a snapshot on the dest
-        dest_snap = snap.with_dataset(dest.path)
-        dest.snaps.insert(0, dest_snap)
-        snaps_sent += 1
-        yield
+    if is_consecutive:
+        # Can do single send_receive with include_intermediates=True
+        _send_receive(source, dest, base=batch_first, snap=batch_last, include_intermediates=True, enc_mode=enc_mode, log_indent=log_indent+1)
+    else:
+        # Must send snapshots one-by-one
+        for base, snap in batch:
+            _send_receive(source, dest, base=base, snap=snap, include_intermediates=False, enc_mode=enc_mode, log_indent=log_indent+1)
 
-    # Group has been sent.
-    # Determine first and last group snapshot.
-    group_first = group[0][0]
-    group_last = group[-1][1]
-    group_first_dest = next(iter(s for s in dest.snaps if s.guid == group_first.guid))
-    group_last_dest = next(iter(s for s in dest.snaps if s.guid == group_last.guid))
+    # We just created snapshots at dest
+    for _, snap in batch:
+        dest.snaps.insert(0, snap.with_dataset(dest.path))
 
-    # Update holds on first snap in group
-    source.cli.hold([group_last.longname], source.holdtag)
-    group_last.num_holds += 1
-    dest.cli.hold([group_last_dest.longname], dest.holdtag)
-    group_last_dest.num_holds += 1
+    # Determine first and last batch snapshot.
+    batch_first_dest = next(iter(s for s in dest.snaps if s.guid == batch_first.guid))
+    batch_last_dest = next(iter(s for s in dest.snaps if s.guid == batch_last.guid))
 
-    # Update holds on last snap in group
-    source.cli.release_hold([group_first.longname], source.holdtag)
-    group_first.num_holds -= 1
-    dest.cli.release_hold([group_first_dest.longname], dest.holdtag)
-    group_first_dest.num_holds -= 1
+    # Update holds on first snap in batch
+    source.cli.hold([batch_last.longname], source.holdtag)
+    batch_last.num_holds += 1
+    dest.cli.hold([batch_last_dest.longname], dest.holdtag)
+    batch_last_dest.num_holds += 1
+
+    # Update holds on last snap in batch
+    source.cli.release_hold([batch_first.longname], source.holdtag)
+    batch_first.num_holds -= 1
+    dest.cli.release_hold([batch_first_dest.longname], dest.holdtag)
+    batch_first_dest.num_holds -= 1
+
+
+def _send_receive(
+    source: DatasetSide,
+    dest: DatasetSide,
+    snap: Snapshot,
+    base: Snapshot | None,
+    include_intermediates: bool,
+    enc_mode: EncryptionMode,
+    override_props: dict[str, str] = {},
+    log_indent: int = 0
+) -> None:
+    """Send a single snapshot from `source` to `dest`, while preserving custom zfsnapper tags."""
+    assert is_set(source.dataset)
+    send_receive(
+        clis=(source.cli, dest.cli),
+        dest_dataset=dest.path,
+        snapshot=snap,
+        base=base,
+        raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
+        include_intermediates=include_intermediates,
+        send_props=True,
+        no_preserve_encryption=source.dataset.is_encrypted and enc_mode == EncryptionMode.CLEAR,
+        exclude_props=EXCLUDABLE_RECEIVE_PROPS - {ZfsProperty.CUSTOM_TAGS},  # exclude all known properties except custom tags,
+        override_props=override_props,
+        log_indent=log_indent
+    )
 
 
 def create_peering_info(side: DatasetSide, direction: Direction):

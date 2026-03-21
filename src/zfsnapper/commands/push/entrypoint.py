@@ -49,6 +49,7 @@ def entrypoint(args: Args) -> None:
             src_conn=conn,
             dst_conn=dest_spec.conn,
             enc_mode=args.enc_mode,
+            batch_size=args.batch_size,
             localhost=args.localhost,
             log_indent=1
         )
@@ -65,6 +66,7 @@ def push_conn(
     src_conn: ConnSpec,
     dst_conn: ConnSpec,
     enc_mode: EncryptionMode,
+    batch_size: int,
     localhost: str | None,
     log_indent: int = 0
 ):
@@ -131,6 +133,7 @@ def push_conn(
                     rollback=rollback,
                     allow_init=allow_init,
                     enc_mode=enc_mode,
+                    batch_size=batch_size,
                     localhost=localhost,
                     log_indent=log_indent + 1
                 )

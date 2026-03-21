@@ -52,7 +52,7 @@ def parse_property_source(source: str) -> PropertySource:
     raise ValueError(f"Invalid property source")
 
 
-class ZfsProperty:
+class ZfsProperty(StrEnum):
     NAME = 'name'
     CREATION = 'creation'
     GUID = 'guid'
@@ -64,6 +64,29 @@ class ZfsProperty:
     TYPE = 'type'
     ENCRYPTION = 'encryption'
     CUSTOM_TAGS = 'zfsnapper:tags'  # the user property used to store and read tags
+    SHARENFS = 'sharenfs'
+    SHARESMB = 'sharesmb'
+    QUOTA = 'quota'
+    RESERVATION = 'reservation'
+    REFRESERVATION = 'refreservation'
+    COMPRESSION = 'compression'
+    RECORDSIZE = 'recordsize'
+
+PEER_SLOT_PROPERTIES = [f'zfsnapper:peer:{i}' for i in range(50)]
+
+ALL_ZFS_PROPERTIES: list[str] = list(ZfsProperty) + PEER_SLOT_PROPERTIES
+
+UNEXCLUDABLE_RECEIVE_PROPS = [
+    ZfsProperty.NAME,
+    ZfsProperty.TYPE,
+    ZfsProperty.CREATION,
+    ZfsProperty.USERREFS,
+    ZfsProperty.GUID,
+    ZfsProperty.ENCRYPTION
+]
+"""Properties which cannot be passed for `zfs receive -x`"""
+
+EXCLUDABLE_RECEIVE_PROPS = set(ALL_ZFS_PROPERTIES) - set(UNEXCLUDABLE_RECEIVE_PROPS)
 
 
 class PeerField(StrEnum):
@@ -432,7 +455,7 @@ class ZfsCli(ABC):
         properties = list(dict.fromkeys(REQUIRED_DATASET_PROPS + list(properties)))  # eliminate duplicates
 
         # Add peer slots
-        properties += [f'zfsnapper:peer:{i}' for i in range(50)]
+        properties += PEER_SLOT_PROPERTIES
 
         cmd: list[str] = [
             'zfs', 'get', '-Hp',

@@ -47,3 +47,8 @@ def sort_dict[K, V](dict_: dict[K, V], key: Callable[[K], Any], reverse: bool = 
 
 def space(num: int):
     return " " * (4 * num)
+
+
+def is_subsequence[T](sub: Sequence[T], master: Sequence[T]) -> bool:
+    n = len(sub)
+    return any(master[i:i+n] == sub for i in range(len(master) - n + 1))
