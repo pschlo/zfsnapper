@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Literal, TYPE_CHECKING
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from zfsnapper.common.replication import ReplicationError
 from zfsnapper.common.resolve_datasets import ResolvedDatasets, create_zfs_cli, resolve_conn_datasets
@@ -162,6 +163,27 @@ def push_conn(
             assert False
 
 
+def _fetch_side_data(
+    cli: ZfsCli,
+    datasets: ResolvedDatasets,
+) -> tuple[dict[Path, list[Snapshot]], dict[Path, dict[Snapshot, set[str]]]]:
+    snaps = fetch_snaps(cli=cli, datasets=datasets)
+
+    path_to_snaps = group_by(
+        snaps,
+        lambda s: s.dataset,
+        ensure_keys=datasets.p.matched,
+    )
+
+    path_to_holds: dict[Path, dict[Snapshot, set[str]]] = group_by(
+        get_holds(cli, snaps),
+        lambda s: s.dataset,
+        ensure_keys=datasets.p.matched,
+    )
+
+    return path_to_snaps, path_to_holds
+
+
 def create_pairs(
     src_cli: ZfsCli,
     dest_cli: ZfsCli,
@@ -174,36 +196,16 @@ def create_pairs(
     src_conn: ConnSpec,
     dst_conn: ConnSpec,
     relpath_to_paths: dict[Path, tuple[Path, Path]],
-    missing_dest_paths: set[Path]
+    missing_dest_paths: set[Path],
 ) -> dict[Path, tuple[DatasetSide, DatasetSide]]:
     """Fetch source + dest snapshots and create dataset sides."""
-    # Fetch all snapshots.
-    src_snaps = fetch_snaps(cli=src_cli, datasets=src_datasets)
-    srcpath_to_snaps = group_by(
-        src_snaps,
-        lambda s: s.dataset,
-        ensure_keys=src_datasets.p.matched
-    )
-    dest_snaps = fetch_snaps(cli=dest_cli, datasets=dest_datasets)
-    destpath_to_snaps = group_by(
-        dest_snaps,
-        lambda s: s.dataset,
-        ensure_keys=dest_datasets.p.matched
-    )
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        src_future = executor.submit(_fetch_side_data, src_cli, src_datasets)
+        dest_future = executor.submit(_fetch_side_data, dest_cli, dest_datasets)
 
-    # Fetch holds
-    srcpath_to_holds: dict[Path, dict[Snapshot, set[str]]] = group_by(
-        get_holds(src_cli, src_snaps),
-        lambda s: s.dataset,
-        ensure_keys=src_datasets.p.matched
-    )
-    destpath_to_holds: dict[Path, dict[Snapshot, set[str]]] = group_by(
-        get_holds(dest_cli, dest_snaps),
-        lambda s: s.dataset,
-        ensure_keys=dest_datasets.p.matched
-    )
+        srcpath_to_snaps, srcpath_to_holds = src_future.result()
+        destpath_to_snaps, destpath_to_holds = dest_future.result()
 
-    # Create dataset sides
     sides: dict[Path, tuple[DatasetSide, DatasetSide]] = {}
     for relpath, (srcpath, destpath) in relpath_to_paths.items():
         source = DatasetSide(
@@ -214,7 +216,7 @@ def create_pairs(
             pool=src_pools[srcpath[0]],
             dataset=src_datasets.path_to_dataset[srcpath],
             snaps=srcpath_to_snaps[srcpath],
-            holds=srcpath_to_holds[srcpath]
+            holds=srcpath_to_holds[srcpath],
         )
         dest = DatasetSide(
             conn=dst_conn,
@@ -224,7 +226,7 @@ def create_pairs(
             path=destpath,
             dataset=dest_datasets.path_to_dataset[destpath] if destpath not in missing_dest_paths else NOT_SET,
             snaps=destpath_to_snaps[destpath] if destpath not in missing_dest_paths else NOT_SET,
-            holds=destpath_to_holds[destpath] if destpath not in missing_dest_paths else NOT_SET
+            holds=destpath_to_holds[destpath] if destpath not in missing_dest_paths else NOT_SET,
         )
         sides[relpath] = (source, dest)
 
