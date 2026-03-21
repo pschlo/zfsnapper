@@ -6,7 +6,7 @@ import sys
 import logging
 
 from .setup_logging import setup_logging
-setup_logging(logging.INFO)
+setup_logging(logging.DEBUG)
 from .args import get_args
 from .commands import (
     prune as _prune,

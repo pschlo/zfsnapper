@@ -568,9 +568,12 @@ class ZfsCli(ABC):
         cmd += objects
         self._run_text_command(cmd)
 
-    def set_snapshot_tags(self, snap_fullname: str, tags: Collection[str]):
+    def set_snapshot_tags(self, snap_fullnames: str | Collection[str], tags: Collection[str]):
+        if isinstance(snap_fullnames, str):
+            snap_fullnames = [snap_fullnames]
+
         props = {str(ZfsProperty.ZFSNAPPER_TAGS): ','.join(tags)}
-        self.set_properties(snap_fullname, props)
+        self.set_properties(snap_fullnames, props)
 
     def destroy_snapshots(self, dataset: Path | str, snapshots_shortnames: Collection[str]) -> None:
         if not snapshots_shortnames:

@@ -13,7 +13,7 @@ from zfsnapper.common.parse_dataset_arg import ConnSpec
 from zfsnapper.common.path import Path
 from zfsnapper.common.sort import sortkey_snap_by_time
 from zfsnapper.common.zfs import ZfsCli, Dataset, PeeringInfo, Snapshot, ZfsDatasetType, ZfsProperty, Pool, EXCLUDABLE_RECEIVE_PROPS
-from zfsnapper.common.utils import space, is_subsequence
+from zfsnapper.common.utils import space, is_subsequence, group_by, invert_dict
 from zfsnapper.common.replication.utils import Direction, Peering
 
 
@@ -256,13 +256,18 @@ def _transfer_batch(batch: tuple[tuple[Snapshot, Snapshot], ...], source: Datase
     if is_consecutive:
         # Can do single send_receive with include_intermediates=True
         _send_receive(source, dest, base=batch_first, snap=batch_last, include_intermediates=True, enc_mode=enc_mode, log_indent=log_indent+1)
-        for _, snap in batch:
-            # Determine corresponding dest snap, set tags, and store
-            _dest_snap = snap.with_dataset(dest.path)
-            if snap.tags is not None:
-                dest.cli.set_snapshot_tags(_dest_snap.longname, snap.tags)
-            dest.snaps.insert(0, _dest_snap)
-            dest.holds.setdefault(_dest_snap, set())
+
+        # Determine corresponding dest snap, set tags, and store
+        _dest_snaps = [s.with_dataset(dest.path) for _, s in batch]
+        tags_to_destsnaps = group_by(_dest_snaps, key=lambda s: s.tags)
+        tags_to_destsnaps.pop(None, None)
+        for tags, destsnaps in tags_to_destsnaps.items():
+            assert tags is not None
+            dest.cli.set_snapshot_tags([s.longname for s in destsnaps], tags)
+        for s in _dest_snaps:
+            dest.snaps.insert(0, s)
+            dest.holds.setdefault(s, set())
+
     else:
         # Must send snapshots one-by-one
         for base, snap in batch:

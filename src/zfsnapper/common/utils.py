@@ -75,6 +75,11 @@ def sort_dict[K, V](dict_: dict[K, V], key: Callable[[K], Any], reverse: bool = 
     sorted_keys = sorted(dict_.keys(), key=key, reverse=reverse)
     return {k: dict_[k] for k in sorted_keys}
 
+def invert_dict[K: Hashable, V: Hashable](mapping: Mapping[K, V]) -> dict[V, list[K]]:
+    groups: dict[V, list[K]] = {}
+    for k, v in mapping.items():
+        groups.setdefault(v, []).append(k)
+    return groups
 
 def space(num: int):
     return " " * (4 * num)
