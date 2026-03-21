@@ -101,10 +101,6 @@ def send_receive(
         for p in send_proc, recv_proc:
             if p.returncode != 0:
                 raise CalledProcessError(p.returncode, cmd=p.args)
-        
-        # set tags on dest snapshot
-        # if snapshot.tags is not None:
-        #     dest_cli.set_snapshot_tags(snapshot.with_dataset(dest_dataset).longname, snapshot.tags)
     
     except BaseException as e:
         log.info("Cleaning up")

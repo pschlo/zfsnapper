@@ -43,6 +43,7 @@ class DatasetSide:
     pool: Pool
     dataset: Dataset | NotSet = NOT_SET
     snaps: list[Snapshot] | NotSet = NOT_SET
+    holds: dict[Snapshot, set[str]] | NotSet = NOT_SET
     holdtag: str | NotSet = NOT_SET
     base_snap: Snapshot | None | NotSet = NOT_SET
 
@@ -51,7 +52,7 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
     def _s(level: int = 0):
         return space(log_indent + level)
 
-    assert is_set(source.dataset) and is_set(source.snaps)
+    assert is_set(source.dataset) and is_set(source.snaps) and is_set(source.holds)
     if not source.snaps:
         raise ReplicationError(f"Source '{source.path}' has no snapshots")
 
@@ -61,19 +62,20 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
     # Flag to store whether we have just created/initialized the destination dataset
     just_created_dest: bool
 
-    if not is_set(dest.dataset) or not is_set(dest.snaps):
-        assert not is_set(dest.dataset) and not is_set(dest.snaps)
+    if not is_set(dest.dataset) or not is_set(dest.snaps) or not is_set(dest.holds):
+        assert not is_set(dest.dataset) and not is_set(dest.snaps) and not is_set(dest.holds)
 
         # Dest dataset does not exist; cannot fetch snapshots.
         if not allow_init:
             raise ReplicationError(f"Destination dataset '{dest.path}' does not exist and will not be created", log_indent=log_indent)
         # Do initial send-receive to create dest dataset.
-        transfer_initial(source, dest, snapshot=source.snaps[-1], enc_mode=enc_mode, log_indent=log_indent)
+        transfer_initial(source, dest, snap=source.snaps[-1], enc_mode=enc_mode, log_indent=log_indent)
 
         # Fetch the newly created dataset and set base snaps
         source.base_snap = source.snaps[-1]
         dest.base_snap = source.base_snap.with_dataset(dest.path)
         dest.snaps = [dest.base_snap]
+        dest.holds = {dest.base_snap: set()}
         dest.dataset = dest.cli.get_dataset(dest.path)
 
         # Determine holdtags
@@ -83,8 +85,11 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         # Create holds
         source.cli.hold([source.base_snap.longname], source.holdtag)
         source.base_snap.num_holds += 1
+        source.holds[source.base_snap].add(source.holdtag)
+
         dest.cli.hold([dest.base_snap.longname], dest.holdtag)
         dest.base_snap.num_holds += 1
+        dest.holds[dest.base_snap].add(dest.holdtag)
 
         just_created_dest = True
 
@@ -98,10 +103,14 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         source.holdtag = Peering(Direction.SEND, dest.dataset.guid).to_tag()
         dest.holdtag = Peering(Direction.RECEIVE, source.dataset.guid).to_tag()
 
+        # Find latest held on dest.
+        # This is representative of up to where replication was completely finished (e.g. tags set)
+        latest_held_dest = next(iter(i for i, s in enumerate(dest.snaps) if dest.holdtag in dest.holds[s]), None)
+
         # Determine base snap
         source.base_snap, dest.base_snap = find_latest_common(source, dest)
 
-        # Check holds
+        # Fix holds
         ensure_holds(source, dest, log_indent=log_indent)
 
         # figure out base index
@@ -110,8 +119,15 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         if dest.base_snap.guid != dest.snaps[0].guid:
             raise ReplicationError(f"Destination '{dest.path}' has snapshots newer than latest common snapshot '{dest.base_snap.shortname}'", log_indent=log_indent)
 
-        # Check base snap tags
-        check_base_snap_tags(source, dest, log_indent=log_indent)
+        # Try to repair unset tags.
+        # For each snap after latest hold that has tags UNSET on dest but set on source, update tags.
+        if latest_held_dest is not None:
+            for dest_snap in dest.snaps[:latest_held_dest]:
+                repair_tags(
+                    dest_snap,
+                    source_snaps=source.snaps,
+                    dest_cli=dest.cli
+                )
 
         # Optionally rollback dest
         if rollback:
@@ -132,8 +148,8 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         raise e
 
 
-def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot, enc_mode: EncryptionMode, log_indent: int = 0):
-    """Perform a single initial send-receive, thereby creating the dest dataset."""
+def transfer_initial(source: DatasetSide, dest: DatasetSide, snap: Snapshot, enc_mode: EncryptionMode, log_indent: int = 0):
+    """Perform a single initial send-receive, thereby creating the dest dataset. Also sets tags."""
     def _s(level: int = 0):
         return space(log_indent + level)
 
@@ -152,13 +168,15 @@ def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot,
     log.info(_s() + f"Creating destination dataset by transferring oldest snapshot")
     _send_receive(
         source, dest,
-        snap=snapshot,
+        snap=snap,
         base=None,
         include_intermediates=False,
         enc_mode=enc_mode,
         override_props=properties,
         log_indent=log_indent + 1,
     )
+    if snap.tags is not None:
+        dest.cli.set_snapshot_tags(snap.with_dataset(dest.path).longname, snap.tags)
 
 
 """
@@ -220,8 +238,11 @@ def _transfer_batch(batch: tuple[tuple[Snapshot, Snapshot], ...], source: Datase
 
     - First batch snap must be held
     - After, the last batch snap is held
+
+    In worst case, tags are set only after entire batch has been sent.
     """
     assert is_set(source.snaps) and is_set(dest.snaps)
+    assert is_set(source.holds) and is_set(dest.holds)
     assert is_set(source.dataset)
     assert is_set(source.holdtag) and is_set(dest.holdtag)
 
@@ -238,14 +259,23 @@ def _transfer_batch(batch: tuple[tuple[Snapshot, Snapshot], ...], source: Datase
     if is_consecutive:
         # Can do single send_receive with include_intermediates=True
         _send_receive(source, dest, base=batch_first, snap=batch_last, include_intermediates=True, enc_mode=enc_mode, log_indent=log_indent+1)
+        for _, snap in batch:
+            # Determine corresponding dest snap, set tags, and store
+            _dest_snap = snap.with_dataset(dest.path)
+            if snap.tags is not None:
+                dest.cli.set_snapshot_tags(_dest_snap.longname, snap.tags)
+            dest.snaps.insert(0, _dest_snap)
+            dest.holds.setdefault(_dest_snap, set())
     else:
         # Must send snapshots one-by-one
         for base, snap in batch:
             _send_receive(source, dest, base=base, snap=snap, include_intermediates=False, enc_mode=enc_mode, log_indent=log_indent+1)
-
-    # We just created snapshots at dest
-    for _, snap in batch:
-        dest.snaps.insert(0, snap.with_dataset(dest.path))
+            # Determine corresponding dest snap, set tags, and store
+            _dest_snap = snap.with_dataset(dest.path)
+            if snap.tags is not None:
+                dest.cli.set_snapshot_tags(_dest_snap.longname, snap.tags)
+            dest.snaps.insert(0, _dest_snap)
+            dest.holds.setdefault(_dest_snap, set())
 
     # Determine first and last batch snapshot.
     batch_first_dest = next(iter(s for s in dest.snaps if s.guid == batch_first.guid))
@@ -254,14 +284,20 @@ def _transfer_batch(batch: tuple[tuple[Snapshot, Snapshot], ...], source: Datase
     # Update holds on first snap in batch
     source.cli.hold([batch_last.longname], source.holdtag)
     batch_last.num_holds += 1
+    source.holds[batch_last].add(source.holdtag)
+
     dest.cli.hold([batch_last_dest.longname], dest.holdtag)
     batch_last_dest.num_holds += 1
+    dest.holds[batch_last_dest].add(dest.holdtag)
 
     # Update holds on last snap in batch
     source.cli.release_hold([batch_first.longname], source.holdtag)
     batch_first.num_holds -= 1
+    source.holds[batch_first].remove(source.holdtag)
+
     dest.cli.release_hold([batch_first_dest.longname], dest.holdtag)
     batch_first_dest.num_holds -= 1
+    dest.holds[batch_first_dest].remove(dest.holdtag)
 
 
 def _send_receive(
@@ -283,9 +319,9 @@ def _send_receive(
         base=base,
         raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
         include_intermediates=include_intermediates,
-        send_props=True,
+        send_props=False,  # Currently incompatible with raw send
         # no_preserve_encryption=source.dataset.is_encrypted and enc_mode == EncryptionMode.CLEAR,  # not yet widely available
-        exclude_props=EXCLUDABLE_RECEIVE_PROPS - {ZfsProperty.CUSTOM_TAGS},  # exclude all known properties except custom tags,
+        # exclude_props=EXCLUDABLE_RECEIVE_PROPS - {ZfsProperty.CUSTOM_TAGS},  # exclude all known properties except custom tags,
         override_props=override_props,
         log_indent=log_indent
     )
@@ -317,43 +353,42 @@ def check_timestamp_conflicts(source: DatasetSide, dest: DatasetSide, transfer_s
             )
 
 
-def check_base_snap_tags(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
+def repair_tags(dest_snap: Snapshot, source_snaps: list[Snapshot], dest_cli: ZfsCli, log_indent: int = 0):
     def _s(level: int = 0):
         return space(log_indent + level)
 
-    assert is_set(source.base_snap) and is_set(dest.base_snap)
-    assert source.base_snap is not None and dest.base_snap is not None
+    if dest_snap.tags is not None:
+        # Tags are already set
+        return
 
-    # Ensure base snapshot on dest has correct tags; this may help if previous replication was aborted before tags could be set
-    if (_src_tags := source.base_snap.tags) is not None:
-        _dest_tags = dest.base_snap.tags or set()
-        if _missing := _src_tags - _dest_tags:
-            log.info(_s() + f"Adding {len(_missing)} missing tags to base snapshot '{dest.base_snap.shortname}' on destination")
-            dest_tags = frozenset(_dest_tags | _missing)
-            dest.cli.set_snapshot_tags(dest.base_snap.longname, dest_tags)
-            dest.base_snap.tags = dest_tags
+    src_snap = next(iter(s for s in source_snaps if s.guid == dest_snap.guid), None)
+    if src_snap is None:
+        # There is no corresponding source snapshot to copy tags from
+        return
+
+    if src_snap.tags is None:
+        # Source snapshot does not have tags set
+        return
+
+    log.info(_s() + f"Adding {len(src_snap.tags)} missing tags to snapshot '{dest_snap.shortname}' on destination")
+    dest_cli.set_snapshot_tags(dest_snap.longname, src_snap.tags)
+    dest_snap.tags = frozenset(src_snap.tags)
 
 
 def ensure_holds(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
-    """Uses source.base_snap and dest.base_snap."""
-    assert is_set(source.snaps) and is_set(dest.snaps)
-    assert is_set(source.holdtag) and is_set(dest.holdtag)
-    assert is_set(source.base_snap) and is_set(dest.base_snap)
-
     """Ensures the latest common snapshot is held on both sides. Removes all other peer holdtags.
 
     After completion, one of these is true:
-    1. There are no holdtags on either side, since there was no common snapshot
-    2. There is exactly one holdtag on each side, on the latest common snapshot
+    - There are no holdtags on either side, since there was no common snapshot
+    - There is exactly one holdtag on each side, on the latest common snapshot
     """
+    assert is_set(source.snaps) and is_set(dest.snaps)
+    assert is_set(source.holds) and is_set(dest.holds)
+    assert is_set(source.holdtag) and is_set(dest.holdtag)
+    assert is_set(source.base_snap) and is_set(dest.base_snap)
+
     def _s(level: int = 0):
         return space(log_indent + level)
-
-    # Get holds
-    holds = (
-        get_holds(source.cli, source.snaps),
-        get_holds(dest.cli, dest.snaps)
-    )
 
     if source.base_snap is None or dest.base_snap is None:
         # Remove all peer holdtags
@@ -361,25 +396,27 @@ def ensure_holds(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
             source.snaps,
             dest.snaps
         )
-        _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), current_holdtags=holds, log_indent=log_indent)
+        _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), current_holdtags=(source.holds, dest.holds), log_indent=log_indent)
         return
 
     # Ensure latest common snap is held
-    if source.holdtag not in holds[0][source.base_snap]:
+    if source.holdtag not in source.holds[source.base_snap]:
         log.info(_s() + f"Creating hold for latest common snapshot '{source.base_snap.shortname}' on source")
         source.cli.hold([source.base_snap.longname], tag=source.holdtag)
         source.base_snap.num_holds += 1
-    if dest.holdtag not in holds[1][dest.base_snap]:
+        source.holds[source.base_snap].add(source.holdtag)
+    if dest.holdtag not in dest.holds[dest.base_snap]:
         log.info(_s() + f"Creating hold for latest common snapshot '{dest.base_snap.shortname}' on destination")
         dest.cli.hold([dest.base_snap.longname], tag=dest.holdtag)
         dest.base_snap.num_holds += 1
+        dest.holds[dest.base_snap].add(dest.holdtag)
 
     # Remove all other holdtags
     release_snaps = (
         [s for s in source.snaps if s.guid != source.base_snap.guid],
         [s for s in dest.snaps if s.guid != dest.base_snap.guid]
     )
-    _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), current_holdtags=holds, log_indent=log_indent)
+    _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), current_holdtags=(source.holds, dest.holds), log_indent=log_indent)
 
 
 def find_latest_common(source: DatasetSide, dest: DatasetSide) -> tuple[Snapshot, Snapshot] | tuple[None, None]:
@@ -430,7 +467,9 @@ def _release_holds(
     clis[0].release_hold([s.longname for s in release_snaps[0]], release_holdtags[0])
     for s in release_snaps[0]:
         s.num_holds -= 1
+        current_holdtags[0][s].remove(release_holdtags[0])
 
     clis[1].release_hold([s.longname for s in release_snaps[1]], release_holdtags[1])
     for s in release_snaps[1]:
         s.num_holds -= 1
+        current_holdtags[1][s].remove(release_holdtags[1])
