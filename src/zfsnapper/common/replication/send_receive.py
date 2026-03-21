@@ -1,5 +1,6 @@
 from typing import Callable, Any
 from subprocess import CalledProcessError
+from collections.abc import Collection
 import logging
 import threading
 import time
@@ -33,7 +34,10 @@ def send_receive(
     base: Snapshot | None,
     raw: bool,
     include_intermediates: bool = False,
-    properties: dict[str, str] = {},
+    send_props: bool = False,
+    override_props: dict[str, str] = {},
+    exclude_props: Collection[str] = [],
+    no_preserve_encryption: bool = False,
     log_indent: int = 0
 ) -> None:
     """Perform a single send-receive."""
@@ -46,12 +50,24 @@ def send_receive(
 
     try:
         # 1) Start sender: stdout=PIPE for data, stderr=PIPE for progress
-        send_proc = src_cli.send_snapshot_async(snapshot.longname, raw=raw, base_fullname=base.longname if base else None, include_intermediates=include_intermediates)
+        send_proc = src_cli.send_snapshot_async(
+            snapshot.longname,
+            raw=raw,
+            base_fullname=base.longname if base else None,
+            include_intermediates=include_intermediates,
+            props=send_props,
+            no_preserve_encryption=no_preserve_encryption
+        )
         assert send_proc.stdout is not None
         assert send_proc.stderr is not None
 
         # 2) Start receiver, feeding it the sender's stdout
-        recv_proc = dest_cli.receive_snapshot_async(dest_dataset, send_proc.stdout, properties)
+        recv_proc = dest_cli.receive_snapshot_async(
+            dest_dataset,
+            stdin=send_proc.stdout,
+            override_props=override_props,
+            exclude_props=exclude_props
+        )
 
         # Parent no longer needs its copy of the pipe
         send_proc.stdout.close()

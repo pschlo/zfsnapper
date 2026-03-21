@@ -316,13 +316,17 @@ class ZfsCli(ABC):
             raise CalledProcessError(p.returncode, cmd=p.args, output=stdout)
         return stdout
 
-    def send_snapshot_async(self, snapshot_fullname: str, raw: bool, base_fullname: Optional[str] = None, include_intermediates: bool = False) -> Popen[bytes]:
+    def send_snapshot_async(self, snapshot_fullname: str, raw: bool, base_fullname: Optional[str] = None, include_intermediates: bool = False, props: bool = False, no_preserve_encryption: bool = False) -> Popen[bytes]:
         if include_intermediates and base_fullname is None:
             raise ValueError("include_intermediates=True requires a base snapshot")
 
         cmd = ['zfs', 'send', '-v']
         if raw:
-            cmd += ['--raw']
+            cmd += ['-w']
+        if props:
+            cmd += ['-p']
+        if no_preserve_encryption:
+            cmd += ['-U']
         if base_fullname:
             cmd += [
                 '-I' if include_intermediates else '-i',
@@ -331,10 +335,12 @@ class ZfsCli(ABC):
         cmd += [snapshot_fullname]
         return self._start_command(cmd, stdout=PIPE, stderr=PIPE)
 
-    def receive_snapshot_async(self, dataset: Path | str, stdin: IO[bytes], properties: dict[str, str] = {}) -> Popen[bytes]:
+    def receive_snapshot_async(self, dataset: Path | str, stdin: IO[bytes], override_props: dict[str, str] = {}, exclude_props: Collection[str] = []) -> Popen[bytes]:
         cmd = ['zfs', 'receive', '-u']
-        for property, value in properties.items():
+        for property, value in override_props.items():
             cmd += ['-o', f'{property}={value}']
+        for property in exclude_props:
+            cmd += ['-x', f'{property}']
         cmd += [str(dataset)]
         return self._start_command(cmd, stdin=stdin)
 

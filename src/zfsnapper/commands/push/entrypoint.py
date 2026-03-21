@@ -49,7 +49,8 @@ def entrypoint(args: Args) -> None:
             src_conn=conn,
             dst_conn=dest_spec.conn,
             enc_mode=args.enc_mode,
-            localhost=args.localhost
+            localhost=args.localhost,
+            log_indent=1
         )
 
 
@@ -64,13 +65,14 @@ def push_conn(
     src_conn: ConnSpec,
     dst_conn: ConnSpec,
     enc_mode: EncryptionMode,
-    localhost: str | None
+    localhost: str | None,
+    log_indent: int = 0
 ):
     """
     Push MULTIPLE source datasets to SINGLE dest dataset
     """
     def _s(level: int = 0):
-        return space(level)
+        return space(log_indent + level)
 
     # Identify src pools
     _poolnames = {d.poolname for d in src_datasets.matched}
@@ -121,7 +123,7 @@ def push_conn(
             source, dest = pairs[relpath]
 
             try:
-                log.info(_s(1) + f"Checking dataset: ~{f'/{relpath}' if relpath else ''}")
+                log.info(_s(0) + f"Checking dataset: ~{f'/{relpath}' if relpath else ''}")
                 replicate(
                     source,
                     dest,
@@ -130,7 +132,7 @@ def push_conn(
                     allow_init=allow_init,
                     enc_mode=enc_mode,
                     localhost=localhost,
-                    log_indent=2
+                    log_indent=log_indent + 1
                 )
                 break
 
@@ -146,11 +148,11 @@ def push_conn(
 
                 if _consecutive_fails >= 3:
                     # We did not make any progress three times in a row; give up
-                    log.info(_s(2) + f"Replication failed three times in a row without making progress; giving up")
-                    raise ReplicationError(f"Replication failed for dataset: {source.path}")
+                    log.info(_s(1) + f"Replication failed three times in a row without making progress; giving up")
+                    raise ReplicationError(f"Replication failed for dataset: {source.path}", log_indent=log_indent)
 
                 # Keep trying; refetch all snapshots and retry this dataset
-                log.info(_s(2) + f"Retrying")
+                log.info(_s(1) + f"Retrying")
                 pairs = _create_pairs()
                 continue
 

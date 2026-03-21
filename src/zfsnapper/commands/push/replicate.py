@@ -155,7 +155,7 @@ def transfer_initial(source: DatasetSide, dest: DatasetSide, snapshot: Snapshot,
         dest_dataset=dest.path,
         snapshot=snapshot,
         base=None,
-        properties=properties,
+        override_props=properties,
         raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
         log_indent=log_indent + 1
     )
