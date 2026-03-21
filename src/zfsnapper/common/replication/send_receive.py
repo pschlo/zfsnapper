@@ -37,7 +37,7 @@ def send_receive(
     send_props: bool = False,
     override_props: dict[str, str] = {},
     exclude_props: Collection[str] = [],
-    no_preserve_encryption: bool = False,
+    # no_preserve_encryption: bool = False,  # not yet widely available
     log_indent: int = 0
 ) -> None:
     """Perform a single send-receive."""
@@ -56,7 +56,7 @@ def send_receive(
             base_fullname=base.longname if base else None,
             include_intermediates=include_intermediates,
             props=send_props,
-            no_preserve_encryption=no_preserve_encryption
+            # no_preserve_encryption=no_preserve_encryption
         )
         assert send_proc.stdout is not None
         assert send_proc.stderr is not None

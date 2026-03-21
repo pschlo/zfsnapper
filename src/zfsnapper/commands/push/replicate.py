@@ -284,7 +284,7 @@ def _send_receive(
         raw=source.dataset.is_encrypted and enc_mode == EncryptionMode.KEEP,
         include_intermediates=include_intermediates,
         send_props=True,
-        no_preserve_encryption=source.dataset.is_encrypted and enc_mode == EncryptionMode.CLEAR,
+        # no_preserve_encryption=source.dataset.is_encrypted and enc_mode == EncryptionMode.CLEAR,  # not yet widely available
         exclude_props=EXCLUDABLE_RECEIVE_PROPS - {ZfsProperty.CUSTOM_TAGS},  # exclude all known properties except custom tags,
         override_props=override_props,
         log_indent=log_indent
