@@ -32,6 +32,7 @@ def send_receive(
     snapshot: Snapshot,
     base: Snapshot | None,
     raw: bool,
+    include_intermediates: bool = False,
     properties: dict[str, str] = {},
     log_indent: int = 0
 ) -> None:
@@ -45,7 +46,7 @@ def send_receive(
 
     try:
         # 1) Start sender: stdout=PIPE for data, stderr=PIPE for progress
-        send_proc = src_cli.send_snapshot_async(snapshot.longname, raw=raw, base_fullname=base.longname if base else None)
+        send_proc = src_cli.send_snapshot_async(snapshot.longname, raw=raw, base_fullname=base.longname if base else None, include_intermediates=include_intermediates)
         assert send_proc.stdout is not None
         assert send_proc.stderr is not None
 

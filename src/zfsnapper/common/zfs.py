@@ -316,12 +316,18 @@ class ZfsCli(ABC):
             raise CalledProcessError(p.returncode, cmd=p.args, output=stdout)
         return stdout
 
-    def send_snapshot_async(self, snapshot_fullname: str, raw: bool, base_fullname: Optional[str] = None) -> Popen[bytes]:
+    def send_snapshot_async(self, snapshot_fullname: str, raw: bool, base_fullname: Optional[str] = None, include_intermediates: bool = False) -> Popen[bytes]:
+        if include_intermediates and base_fullname is None:
+            raise ValueError("include_intermediates=True requires a base snapshot")
+
         cmd = ['zfs', 'send', '-v']
         if raw:
             cmd += ['--raw']
         if base_fullname:
-            cmd += ['-i', base_fullname]
+            cmd += [
+                '-I' if include_intermediates else '-i',
+                base_fullname
+            ]
         cmd += [snapshot_fullname]
         return self._start_command(cmd, stdout=PIPE, stderr=PIPE)
 

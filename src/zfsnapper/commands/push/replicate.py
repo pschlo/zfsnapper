@@ -218,7 +218,7 @@ def _transfer_group(group: tuple[tuple[Snapshot, Snapshot], ...], source: Datase
     - First group snap must be held
     - After, the last group snap is held
     """
-    assert is_set(dest.snaps)
+    assert is_set(source.snaps) and is_set(dest.snaps)
     assert is_set(source.dataset)
     assert is_set(source.holdtag) and is_set(dest.holdtag)
 
