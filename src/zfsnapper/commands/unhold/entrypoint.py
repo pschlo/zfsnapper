@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 def entrypoint(args: Args) -> None:
     resolved = resolve_dataset_args(args)
-    filter = resolve_filter_args(shortnames=args.snapshot)
+    filter = resolve_filter_args(match_shortnames=args.snapshot)
 
     _first = True
     for conn, (datasets, cli) in resolved.items():

@@ -49,15 +49,19 @@ def resolve_dataset_args(
 
 
 def resolve_filter_args(
-    tag_groups: Collection[str] = [],
-    shortnames: Collection[str] = []
+    match_tag_groups: Collection[str] = [],
+    match_shortnames: Collection[str] = [],
+    exclude_tag_groups: Collection[str] = []
 ) -> SnapFilter:
     filter: SnapFilter = snapfilters.Composite()
-    if tag_groups:
+    if match_tag_groups:
         # Empty tag is preserved; used as token to make it possible to match snapshots without tags.
-        filter &= snapfilters.Tag([g.split(',') for g in tag_groups])
-    if shortnames:
-        filter &= snapfilters.Shortname(shortnames)
+        filter &= snapfilters.MatchTag([g.split(',') for g in match_tag_groups])
+    if exclude_tag_groups:
+        # Empty tag is preserved; used as token to make it possible to exclude snapshots without tags.
+        filter &= snapfilters.ExcludeTag([g.split(',') for g in exclude_tag_groups])
+    if match_shortnames:
+        filter &= snapfilters.MatchShortname(match_shortnames)
     return filter
 
 

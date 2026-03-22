@@ -5,9 +5,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 from zfsnapper.common.replication import ReplicationError
 from zfsnapper.common.resolve_datasets import ResolvedDatasets, create_zfs_cli, resolve_conn_datasets
-from zfsnapper.common.command_utils import resolve_dataset_args, fetch_snaps, get_holds
+from zfsnapper.common.command_utils import resolve_dataset_args, fetch_snaps, get_holds, resolve_filter_args
 from zfsnapper.common.parse_dataset_arg import parse_dataset_arg, ConnSpec
 from zfsnapper.common.sort import sortkey_dataset
+from zfsnapper.common.filter import SnapFilter, snapfilters
 from zfsnapper.common.path import Path
 from zfsnapper.common.zfs import ZfsCli, Pool, Snapshot
 from zfsnapper.common.utils import group_by, space
@@ -23,6 +24,7 @@ log = logging.getLogger(__name__)
 def entrypoint(args: Args) -> None:
     assert args.enc_mode in (EncryptionMode.KEEP, EncryptionMode.CLEAR)
 
+    snap_filter = resolve_filter_args(match_tag_groups=args.tag, exclude_tag_groups=args.exclude_tag)
     src_resolved = resolve_dataset_args(args)
     dest_spec = parse_dataset_arg(args.dest)
     if not dest_spec.dataset:
@@ -52,6 +54,7 @@ def entrypoint(args: Args) -> None:
             enc_mode=args.enc_mode,
             batch_size=args.batch_size,
             localhost=args.localhost,
+            snap_filter=snap_filter,
             log_indent=1
         )
 
@@ -69,6 +72,7 @@ def push_conn(
     enc_mode: EncryptionMode,
     batch_size: int,
     localhost: str | None,
+    snap_filter: SnapFilter,
     log_indent: int = 0
 ):
     """
@@ -114,6 +118,7 @@ def push_conn(
         dest_pool=dest_pool,
         src_conn=src_conn,
         dst_conn=dst_conn,
+        snap_filter=snap_filter,
         relpath_to_paths=relpath_to_paths,
         missing_dest_paths=missing_dest_paths
     )
@@ -166,8 +171,9 @@ def push_conn(
 def _fetch_side_data(
     cli: ZfsCli,
     datasets: ResolvedDatasets,
+    snap_filter: SnapFilter = snapfilters.ALLOW_ALL
 ) -> tuple[dict[Path, list[Snapshot]], dict[Path, dict[Snapshot, set[str]]]]:
-    snaps = fetch_snaps(cli=cli, datasets=datasets)
+    snaps = fetch_snaps(cli=cli, datasets=datasets, filter=snap_filter)
 
     path_to_snaps = group_by(
         snaps,
@@ -195,12 +201,13 @@ def create_pairs(
     dest_pool: Pool,
     src_conn: ConnSpec,
     dst_conn: ConnSpec,
+    snap_filter: SnapFilter,
     relpath_to_paths: dict[Path, tuple[Path, Path]],
     missing_dest_paths: set[Path],
 ) -> dict[Path, tuple[DatasetSide, DatasetSide]]:
     """Fetch source + dest snapshots and create dataset sides."""
     with ThreadPoolExecutor(max_workers=2) as executor:
-        src_future = executor.submit(_fetch_side_data, src_cli, src_datasets)
+        src_future = executor.submit(_fetch_side_data, src_cli, src_datasets, snap_filter)
         dest_future = executor.submit(_fetch_side_data, dest_cli, dest_datasets)
 
         srcpath_to_snaps, srcpath_to_holds = src_future.result()

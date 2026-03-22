@@ -54,7 +54,8 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
 
     assert is_set(source.dataset) and is_set(source.snaps) and is_set(source.holds)
     if not source.snaps:
-        raise ReplicationError(f"Source '{source.path}' has no snapshots")
+        log.info(_s() + f"Source has no matching snapshots")
+        return
 
     # Ensure sorting
     source.snaps.sort(key=sortkey_snap_by_time, reverse=True)
@@ -256,28 +257,21 @@ def _transfer_batch(batch: tuple[tuple[Snapshot, Snapshot], ...], source: Datase
     if is_consecutive:
         # Can do single send_receive with include_intermediates=True
         _send_receive(source, dest, base=batch_first, snap=batch_last, include_intermediates=True, enc_mode=enc_mode, log_indent=log_indent+1)
-
-        # Determine corresponding dest snap, set tags, and store
-        _dest_snaps = [s.with_dataset(dest.path) for _, s in batch]
-        tags_to_destsnaps = group_by(_dest_snaps, key=lambda s: s.tags)
-        tags_to_destsnaps.pop(None, None)
-        for tags, destsnaps in tags_to_destsnaps.items():
-            assert tags is not None
-            dest.cli.set_snapshot_tags([s.longname for s in destsnaps], tags)
-        for s in _dest_snaps:
-            dest.snaps.insert(0, s)
-            dest.holds.setdefault(s, set())
-
     else:
         # Must send snapshots one-by-one
         for base, snap in batch:
             _send_receive(source, dest, base=base, snap=snap, include_intermediates=False, enc_mode=enc_mode, log_indent=log_indent+1)
-            # Determine corresponding dest snap, set tags, and store
-            _dest_snap = snap.with_dataset(dest.path)
-            if snap.tags is not None:
-                dest.cli.set_snapshot_tags(_dest_snap.longname, snap.tags)
-            dest.snaps.insert(0, _dest_snap)
-            dest.holds.setdefault(_dest_snap, set())
+
+    # Determine new dest snaps, set tags, and store
+    _dest_snaps = [s.with_dataset(dest.path) for _, s in batch]
+    tags_to_destsnaps = group_by(_dest_snaps, key=lambda s: s.tags)
+    tags_to_destsnaps.pop(None, None)
+    for tags, destsnaps in tags_to_destsnaps.items():
+        assert tags is not None
+        dest.cli.set_snapshot_tags([s.longname for s in destsnaps], tags)
+    for s in _dest_snaps:
+        dest.snaps.insert(0, s)
+        dest.holds.setdefault(s, set())
 
     # Determine first and last batch snapshot.
     batch_first_dest = next(iter(s for s in dest.snaps if s.guid == batch_first.guid))

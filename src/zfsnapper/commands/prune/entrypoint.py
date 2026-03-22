@@ -49,7 +49,7 @@ def entrypoint(args: Args):
         assert False
 
     resolved = resolve_dataset_args(args)
-    filter = resolve_filter_args(tag_groups=args.tag, shortnames=args.snapshot)
+    filter = resolve_filter_args(match_tag_groups=args.tag, match_shortnames=args.snapshot)
 
     _first = True
     for conn, (datasets, cli) in resolved.items():

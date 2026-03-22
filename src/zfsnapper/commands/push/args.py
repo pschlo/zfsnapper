@@ -9,6 +9,8 @@ from .replicate import EncryptionMode
 
 class Args(CommonArgs):
     dest: str
+    tag: list[str]
+    exclude_tag: list[str]
     init: bool
     rollback: bool
     enc_mode: EncryptionMode
@@ -18,6 +20,8 @@ class Args(CommonArgs):
 
 def setup(parser: ArgumentParser) -> None:
     parser.add_argument('dest', metavar='USER@HOST:PORT::DATASET')
+    parser.add_argument('-t', '--tag', action='append', default=[])
+    parser.add_argument('--exclude-tag', action='append', default=[])
     parser.add_argument('--init', action='store_true')
     parser.add_argument('--rollback', action='store_true')
     parser.add_argument(
