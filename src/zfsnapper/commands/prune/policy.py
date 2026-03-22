@@ -13,6 +13,7 @@ from zfsnapper.common.sort import sortkey_snap_by_time
 from zfsnapper.common.utils import group_by
 from zfsnapper.common.resolve_datasets import ResolvedDatasets
 from zfsnapper.commands.peer.common.get_peers import get_peers
+from zfsnapper.common.replication.utils import Direction
 
 
 log = logging.getLogger(__name__)
@@ -120,6 +121,9 @@ def apply_policy(snapshots: Collection[Snapshot], policy: KeepPolicy, *, holds: 
         3. Check whether this snap is at most N away from any hold
         """
         for peer in ds_to_peers[snap.dataset]:
+            # Only applies to sendto-peers
+            if peer.direction != Direction.SEND:
+                continue
             held_snaps = ds_peer_to_holds[(snap.dataset, peer)]
             for held_snap in held_snaps:
                 # Check whether we are at most n away from hold
