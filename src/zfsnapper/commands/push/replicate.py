@@ -10,6 +10,7 @@ from zfsnapper.common.replication import ReplicationError
 from zfsnapper.common.replication.send_receive import send_receive
 from zfsnapper.common.command_utils import update_peerinfo, get_holds
 from zfsnapper.common.parse_dataset_arg import ConnSpec
+from zfsnapper.common.filter import SnapFilter, snapfilters
 from zfsnapper.common.path import Path
 from zfsnapper.common.sort import sortkey_snap_by_time
 from zfsnapper.common.zfs import ZfsCli, Dataset, PeeringInfo, Snapshot, ZfsDatasetType, ZfsProperty, Pool, EXCLUDABLE_RECEIVE_PROPS
@@ -48,7 +49,7 @@ class DatasetSide:
     base_snap: Snapshot | None | NotSet = NOT_SET
 
 
-def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: bool, allow_init: bool, enc_mode: EncryptionMode, batch_size: int, localhost: str | None, log_indent: int = 0):
+def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: bool, allow_init: bool, enc_mode: EncryptionMode, batch_size: int, localhost: str | None, snap_filter: SnapFilter, log_indent: int = 0):
     def _s(level: int = 0):
         return space(log_indent + level)
 
@@ -70,10 +71,11 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         if not allow_init:
             raise ReplicationError(f"Destination dataset '{dest.path}' does not exist and will not be created", log_indent=log_indent)
         # Do initial send-receive to create dest dataset.
-        transfer_initial(source, dest, snap=source.snaps[-1], enc_mode=enc_mode, log_indent=log_indent)
+        initial_snap = snap_filter.apply(source.snaps)[-1]
+        transfer_initial(source, dest, snap=initial_snap, enc_mode=enc_mode, log_indent=log_indent)
 
         # Fetch the newly created dataset and set base snaps
-        source.base_snap = source.snaps[-1]
+        source.base_snap = initial_snap
         dest.base_snap = source.base_snap.with_dataset(dest.path)
         dest.snaps = [dest.base_snap]
         dest.holds = {dest.base_snap: set()}
@@ -110,7 +112,7 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         # Optimize holds
         ensure_holds(source, dest, log_indent=log_indent)
 
-        # figure out base index
+        # Validate base snap
         if source.base_snap is None or dest.base_snap is None:
             raise ReplicationError(f"Source '{source.path}' and destination '{dest.path}' have no common snapshots", log_indent=log_indent)
         if dest.base_snap.guid != dest.snaps[0].guid:
@@ -138,7 +140,7 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
     update_peerinfo(cli=dest.cli, dataset=dest.dataset, peerinfo=create_peering_info(source, Direction.RECEIVE), localhost=localhost)
 
     try:
-        replicate_incrementally(source, dest, enc_mode=enc_mode, batch_size=batch_size, log_indent=log_indent)
+        replicate_incrementally(source, dest, enc_mode=enc_mode, batch_size=batch_size, snap_filter=snap_filter, log_indent=log_indent)
     except ReplicationError as e:
         # Annotate that we have also sent an initial snapshot
         if just_created_dest:
@@ -182,7 +184,7 @@ def transfer_initial(source: DatasetSide, dest: DatasetSide, snap: Snapshot, enc
 - that anchor may lag behind the latest common snapshot by up to batch_size - 1 snapshots
 """
 
-def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: EncryptionMode, batch_size: int, log_indent: int = 0):
+def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: EncryptionMode, batch_size: int, snap_filter: SnapFilter, log_indent: int = 0):
     """Base snapshot must be held."""
     def _s(level: int = 0):
         return space(log_indent + level)
@@ -197,7 +199,8 @@ def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: En
 
     # Determine sequence of planned transfers as (from_source_snap, to_source_snap) tuples
     # Default: transfer all source snapshots from common base to latest.
-    transfer_sequence = list(pairwise(reversed(source.snaps[:base_index+1])))
+    transfer_snaps = list(reversed(snap_filter.apply(source.snaps[:base_index])))
+    transfer_sequence = list(pairwise([source.base_snap] + transfer_snaps))
 
     if not transfer_sequence:
         log.info(_s() + f"Already up to date")
