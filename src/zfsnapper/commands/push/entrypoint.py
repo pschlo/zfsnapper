@@ -118,7 +118,6 @@ def push_conn(
         dest_pool=dest_pool,
         src_conn=src_conn,
         dst_conn=dst_conn,
-        snap_filter=snap_filter,
         relpath_to_paths=relpath_to_paths,
         missing_dest_paths=missing_dest_paths
     )
@@ -141,6 +140,7 @@ def push_conn(
                     enc_mode=enc_mode,
                     batch_size=batch_size,
                     localhost=localhost,
+                    snap_filter=snap_filter,
                     log_indent=log_indent + 1
                 )
                 break
@@ -201,13 +201,12 @@ def create_pairs(
     dest_pool: Pool,
     src_conn: ConnSpec,
     dst_conn: ConnSpec,
-    snap_filter: SnapFilter,
     relpath_to_paths: dict[Path, tuple[Path, Path]],
     missing_dest_paths: set[Path],
 ) -> dict[Path, tuple[DatasetSide, DatasetSide]]:
     """Fetch source + dest snapshots and create dataset sides."""
     with ThreadPoolExecutor(max_workers=2) as executor:
-        src_future = executor.submit(_fetch_side_data, src_cli, src_datasets, snap_filter)
+        src_future = executor.submit(_fetch_side_data, src_cli, src_datasets)
         dest_future = executor.submit(_fetch_side_data, dest_cli, dest_datasets)
 
         srcpath_to_snaps, srcpath_to_holds = src_future.result()
