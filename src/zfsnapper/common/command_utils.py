@@ -81,12 +81,16 @@ def fetch_snaps(
     return snaps
 
 
-def get_holds(
-    cli: ZfsCli,
-    snapshots: Collection[Snapshot]
-) -> dict[Snapshot, set[str]]:
+def get_holds(cli: ZfsCli, snapshots: Collection[Snapshot]) -> dict[Snapshot, set[str]]:
     tags = cli.get_holdtags([s.longname for s in snapshots], userrefs={s.longname: s.num_holds for s in snapshots})
     return {s: tags[s.longname] for s in snapshots}
+
+
+def add_hold(cli: ZfsCli, snap: Snapshot, holdtag: str):
+    cli.hold(snap.longname, holdtag)
+
+def release_hold(cli: ZfsCli, snap: Snapshot, holdtag: str):
+    cli.release_hold(snap.longname, holdtag)
 
 
 def _set_peerinfo_slot(

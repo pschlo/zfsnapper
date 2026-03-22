@@ -35,28 +35,31 @@ def entrypoint(args: Args) -> None:
     dest_dataset_poolname = dest_spec.dataset[0]
     dest_pool = dest_cli.get_pool(dest_dataset_poolname)
 
-    _first = True
-    for conn, (datasets, cli) in src_resolved.items():
-        if not _first:
-            log.info("")
-        _first = False
+    # Create threadpool to allow for concurrency wherever needed
+    with ThreadPoolExecutor(max_workers=4) as thread_exc:
+        _first = True
+        for conn, (datasets, cli) in src_resolved.items():
+            if not _first:
+                log.info("")
+            _first = False
 
-        push_conn(
-            src_cli=cli,
-            src_datasets=datasets,
-            dest_cli=dest_cli,
-            dest_root=dest_spec.dataset,
-            dest_pool=dest_pool,
-            allow_init=args.init,
-            rollback=args.rollback,
-            src_conn=conn,
-            dst_conn=dest_spec.conn,
-            enc_mode=args.enc_mode,
-            batch_size=args.batch_size,
-            localhost=args.localhost,
-            snap_filter=snap_filter,
-            log_indent=1
-        )
+            push_conn(
+                src_cli=cli,
+                src_datasets=datasets,
+                dest_cli=dest_cli,
+                dest_root=dest_spec.dataset,
+                dest_pool=dest_pool,
+                allow_init=args.init,
+                rollback=args.rollback,
+                src_conn=conn,
+                dst_conn=dest_spec.conn,
+                enc_mode=args.enc_mode,
+                batch_size=args.batch_size,
+                localhost=args.localhost,
+                snap_filter=snap_filter,
+                thread_exc=thread_exc,
+                log_indent=1
+            )
 
 
 def push_conn(
@@ -73,6 +76,7 @@ def push_conn(
     batch_size: int,
     localhost: str | None,
     snap_filter: SnapFilter,
+    thread_exc: ThreadPoolExecutor,
     log_indent: int = 0
 ):
     """
@@ -119,7 +123,8 @@ def push_conn(
         src_conn=src_conn,
         dst_conn=dst_conn,
         relpath_to_paths=relpath_to_paths,
-        missing_dest_paths=missing_dest_paths
+        missing_dest_paths=missing_dest_paths,
+        thread_exc=thread_exc
     )
 
     pairs = _create_pairs()
@@ -141,6 +146,7 @@ def push_conn(
                     batch_size=batch_size,
                     localhost=localhost,
                     snap_filter=snap_filter,
+                    thread_exc=thread_exc,
                     log_indent=log_indent + 1
                 )
                 break
@@ -203,14 +209,14 @@ def create_pairs(
     dst_conn: ConnSpec,
     relpath_to_paths: dict[Path, tuple[Path, Path]],
     missing_dest_paths: set[Path],
+    thread_exc: ThreadPoolExecutor
 ) -> dict[Path, tuple[DatasetSide, DatasetSide]]:
     """Fetch source + dest snapshots and create dataset sides."""
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        src_future = executor.submit(_fetch_side_data, src_cli, src_datasets)
-        dest_future = executor.submit(_fetch_side_data, dest_cli, dest_datasets)
+    src_future = thread_exc.submit(_fetch_side_data, src_cli, src_datasets)
+    dest_future = thread_exc.submit(_fetch_side_data, dest_cli, dest_datasets)
 
-        srcpath_to_snaps, srcpath_to_holds = src_future.result()
-        destpath_to_snaps, destpath_to_holds = dest_future.result()
+    srcpath_to_snaps, srcpath_to_holds = src_future.result()
+    destpath_to_snaps, destpath_to_holds = dest_future.result()
 
     sides: dict[Path, tuple[DatasetSide, DatasetSide]] = {}
     for relpath, (srcpath, destpath) in relpath_to_paths.items():

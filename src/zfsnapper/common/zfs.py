@@ -400,12 +400,16 @@ class ZfsCli(ABC):
         """Convenience method for checking if snapshot has hold with certain name"""
         return any((s.tag == tag for s in self.get_holds([snapshot_fullname])))
 
-    def hold(self, snapshots_fullnames: Collection[str], tag: str) -> None:
+    def hold(self, snapshots_fullnames: str | Collection[str], tag: str) -> None:
+        if isinstance(snapshots_fullnames, str):
+            snapshots_fullnames = [snapshots_fullnames]
         if not snapshots_fullnames:
             return
         self._run_text_command(['zfs', 'hold', tag, *snapshots_fullnames])
 
-    def release_hold(self, snapshots_fullnames: Collection[str], tag: str) -> None:
+    def release_hold(self, snapshots_fullnames: str | Collection[str], tag: str) -> None:
+        if isinstance(snapshots_fullnames, str):
+            snapshots_fullnames = [snapshots_fullnames]
         if not snapshots_fullnames:
             return
         self._run_text_command(['zfs', 'release', tag, *snapshots_fullnames])
@@ -549,7 +553,8 @@ class ZfsCli(ABC):
         if isinstance(objects, Path | str):
             objects = [objects]
         objects = [str(obj) for obj in objects]
-        assert objects
+        if not objects:
+            return
 
         cmd = ['zfs', 'set']
         cmd += [f'{p}={v}' for p, v in props_values.items()]
@@ -563,6 +568,8 @@ class ZfsCli(ABC):
         if isinstance(objects, Path | str):
             objects = [objects]
         objects = [str(obj) for obj in objects]
+        if not objects:
+            return
 
         cmd = ['zfs', 'inherit', property]
         cmd += objects
@@ -575,9 +582,12 @@ class ZfsCli(ABC):
         props = {str(ZfsProperty.ZFSNAPPER_TAGS): ','.join(tags)}
         self.set_properties(snap_fullnames, props)
 
-    def destroy_snapshots(self, dataset: Path | str, snapshots_shortnames: Collection[str]) -> None:
+    def destroy_snapshots(self, dataset: Path | str, snapshots_shortnames: str | Collection[str]) -> None:
+        if isinstance(snapshots_shortnames, str):
+            snapshots_shortnames = [snapshots_shortnames]
         if not snapshots_shortnames:
             return
+
         shortnames_str = ','.join(snapshots_shortnames)
         self._run_text_command(['zfs', 'destroy', f'{dataset}@{shortnames_str}'])
 

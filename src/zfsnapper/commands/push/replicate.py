@@ -5,10 +5,11 @@ from dataclasses import dataclass
 from enum import Enum, StrEnum
 from itertools import pairwise, batched
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 from zfsnapper.common.replication import ReplicationError
 from zfsnapper.common.replication.send_receive import send_receive
-from zfsnapper.common.command_utils import update_peerinfo, get_holds
+from zfsnapper.common.command_utils import update_peerinfo, get_holds, add_hold, release_hold
 from zfsnapper.common.parse_dataset_arg import ConnSpec
 from zfsnapper.common.filter import SnapFilter, snapfilters
 from zfsnapper.common.path import Path
@@ -49,7 +50,19 @@ class DatasetSide:
     base_snap: Snapshot | None | NotSet = NOT_SET
 
 
-def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: bool, allow_init: bool, enc_mode: EncryptionMode, batch_size: int, localhost: str | None, snap_filter: SnapFilter, log_indent: int = 0):
+def replicate(
+    source: DatasetSide,
+    dest: DatasetSide,
+    relpath: Path,
+    rollback: bool,
+    allow_init: bool,
+    enc_mode: EncryptionMode,
+    batch_size: int,
+    localhost: str | None,
+    snap_filter: SnapFilter,
+    thread_exc: ThreadPoolExecutor,
+    log_indent: int = 0
+):
     def _s(level: int = 0):
         return space(log_indent + level)
 
@@ -86,11 +99,12 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
         dest.holdtag = Peering(Direction.RECEIVE, source.dataset.guid).to_tag()
 
         # Create holds
-        source.cli.hold([source.base_snap.longname], source.holdtag)
+        f1 = thread_exc.submit(add_hold, source.cli, source.base_snap, source.holdtag)
+        f2 = thread_exc.submit(add_hold, dest.cli, dest.base_snap, dest.holdtag)
+        f1.result()
+        f2.result()
         source.base_snap.num_holds += 1
         source.holds[source.base_snap].add(source.holdtag)
-
-        dest.cli.hold([dest.base_snap.longname], dest.holdtag)
         dest.base_snap.num_holds += 1
         dest.holds[dest.base_snap].add(dest.holdtag)
 
@@ -136,11 +150,33 @@ def replicate(source: DatasetSide, dest: DatasetSide, relpath: Path, rollback: b
 
 
     # Update peer information
-    update_peerinfo(cli=source.cli, dataset=source.dataset, peerinfo=create_peering_info(dest, Direction.SEND), localhost=localhost)
-    update_peerinfo(cli=dest.cli, dataset=dest.dataset, peerinfo=create_peering_info(source, Direction.RECEIVE), localhost=localhost)
+    f1 = thread_exc.submit(
+        update_peerinfo,
+        cli=source.cli,
+        dataset=source.dataset,
+        peerinfo=create_peering_info(dest, Direction.SEND),
+        localhost=localhost,
+    )
+    f2 = thread_exc.submit(
+        update_peerinfo,
+        cli=dest.cli,
+        dataset=dest.dataset,
+        peerinfo=create_peering_info(source, Direction.RECEIVE),
+        localhost=localhost,
+    )
+    f1.result()
+    f2.result()
 
     try:
-        replicate_incrementally(source, dest, enc_mode=enc_mode, batch_size=batch_size, snap_filter=snap_filter, log_indent=log_indent)
+        replicate_incrementally(
+            source,
+            dest,
+            enc_mode=enc_mode,
+            batch_size=batch_size,
+            snap_filter=snap_filter,
+            thread_exc=thread_exc,
+            log_indent=log_indent
+        )
     except ReplicationError as e:
         # Annotate that we have also sent an initial snapshot
         if just_created_dest:
@@ -184,7 +220,15 @@ def transfer_initial(source: DatasetSide, dest: DatasetSide, snap: Snapshot, enc
 - that anchor may lag behind the latest common snapshot by up to batch_size - 1 snapshots
 """
 
-def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: EncryptionMode, batch_size: int, snap_filter: SnapFilter, log_indent: int = 0):
+def replicate_incrementally(
+    source: DatasetSide,
+    dest: DatasetSide,
+    enc_mode: EncryptionMode,
+    batch_size: int,
+    snap_filter: SnapFilter,
+    thread_exc: ThreadPoolExecutor,
+    log_indent: int = 0
+):
     """Base snapshot must be held."""
     def _s(level: int = 0):
         return space(log_indent + level)
@@ -224,6 +268,7 @@ def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: En
                 source,
                 dest,
                 enc_mode=enc_mode,
+                thread_exc=thread_exc,
                 log_indent=log_indent
             )
            snaps_sent += len(batch)
@@ -233,7 +278,14 @@ def replicate_incrementally(source: DatasetSide, dest: DatasetSide, enc_mode: En
             raise
 
 
-def _transfer_batch(batch: tuple[tuple[Snapshot, Snapshot], ...], source: DatasetSide, dest: DatasetSide, enc_mode: EncryptionMode, log_indent: int = 0):
+def _transfer_batch(
+    batch: tuple[tuple[Snapshot, Snapshot], ...],
+    source: DatasetSide,
+    dest: DatasetSide,
+    enc_mode: EncryptionMode,
+    thread_exc: ThreadPoolExecutor,
+    log_indent: int = 0
+):
     """
     Transfer full batch.
 
@@ -280,21 +332,23 @@ def _transfer_batch(batch: tuple[tuple[Snapshot, Snapshot], ...], source: Datase
     batch_first_dest = next(iter(s for s in dest.snaps if s.guid == batch_first.guid))
     batch_last_dest = next(iter(s for s in dest.snaps if s.guid == batch_last.guid))
 
-    # Update holds on first snap in batch
-    source.cli.hold([batch_last.longname], source.holdtag)
+    # Create new holds in parallel
+    f1 = thread_exc.submit(add_hold, source.cli, batch_last, source.holdtag)
+    f2 = thread_exc.submit(add_hold, dest.cli, batch_last_dest, dest.holdtag)
+    f1.result()
+    f2.result()
     batch_last.num_holds += 1
     source.holds[batch_last].add(source.holdtag)
-
-    dest.cli.hold([batch_last_dest.longname], dest.holdtag)
     batch_last_dest.num_holds += 1
     dest.holds[batch_last_dest].add(dest.holdtag)
 
-    # Update holds on last snap in batch
-    source.cli.release_hold([batch_first.longname], source.holdtag)
+    # Rrelease old holds in parallel
+    f3 = thread_exc.submit(release_hold, source.cli, batch_first, source.holdtag)
+    f4 = thread_exc.submit(release_hold, dest.cli, batch_first_dest, dest.holdtag)
+    f3.result()
+    f4.result()
     batch_first.num_holds -= 1
     source.holds[batch_first].remove(source.holdtag)
-
-    dest.cli.release_hold([batch_first_dest.longname], dest.holdtag)
     batch_first_dest.num_holds -= 1
     dest.holds[batch_first_dest].remove(dest.holdtag)
 
