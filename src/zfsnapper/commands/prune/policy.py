@@ -10,6 +10,9 @@ import logging
 
 from zfsnapper.common.zfs import Snapshot
 from zfsnapper.common.sort import sortkey_snap_by_time
+from zfsnapper.common.utils import group_by
+from zfsnapper.common.resolve_datasets import ResolvedDatasets
+from zfsnapper.commands.peer.common.get_peers import get_peers
 
 
 log = logging.getLogger(__name__)
@@ -46,6 +49,7 @@ class KeepPolicy:
 
     name: Optional[re.Pattern] = None
     tags: frozenset[str] = frozenset()
+    after_peerhold: int = 0
 
 
 def unique_bucket(_: datetime) -> int:
@@ -72,7 +76,7 @@ def year_bucket(date: datetime) -> int:
 Returns tuple (keep, destroy)
 Keeps snapshot ordering intact
 """
-def apply_policy(snapshots: Collection[Snapshot], policy: KeepPolicy) -> tuple[list[Snapshot], list[Snapshot]]:
+def apply_policy(snapshots: Collection[Snapshot], policy: KeepPolicy, *, holds: dict[Snapshot, set[str]], datasets: ResolvedDatasets, all_snaps: Collection[Snapshot]) -> tuple[list[Snapshot], list[Snapshot]]:
     # All snapshots, sorted from latest to oldest. Sorting is important for the algorithm to work correctly.
     snaps = sorted(snapshots, key=sortkey_snap_by_time, reverse=True)
     keep: set[Snapshot] = set()
@@ -96,12 +100,33 @@ def apply_policy(snapshots: Collection[Snapshot], policy: KeepPolicy) -> tuple[l
         WithinBucket(policy.within_yearly, year_bucket, -1)
     ]
 
+    # Determine dataset snaps and peers
+    all_snaps = sorted(all_snaps, key=sortkey_snap_by_time, reverse=True)
+    ds_to_peers, ds_peer_to_holds = get_peers(all_snaps, holds, datasets=datasets)
+    ds_to_peers = {d.path: ps for d, ps in ds_to_peers.items()}
+    ds_to_snaps = group_by(all_snaps, key=lambda s: s.dataset, ensure_keys=datasets.p.matched)
+
     for snap in snaps:
         keep_snap = False
 
         # keep matching name
         if policy.name is not None and policy.name.fullmatch(snap.shortname):
             keep_snap = True
+
+        """
+        Keep after peer holds.
+        1. Determine peers
+        2. For each peer, check where the holds are
+        3. Check whether this snap is at most N away from any hold
+        """
+        for peer in ds_to_peers[snap.dataset]:
+            held_snaps = ds_peer_to_holds[(snap.dataset, peer)]
+            for held_snap in held_snaps:
+                # Check whether we are at most n away from hold
+                held_idx = next(iter(i for i, s in enumerate(ds_to_snaps[snap.dataset]) if s.guid == held_snap.guid))
+                our_idx = next(iter(i for i, s in enumerate(ds_to_snaps[snap.dataset]) if s.guid == snap.guid))
+                if our_idx < held_idx and held_idx - our_idx <= policy.after_peerhold:
+                    keep_snap = True
 
         # keep matching tag
         if policy.tags:

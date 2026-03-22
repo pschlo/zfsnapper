@@ -7,6 +7,7 @@ import logging
 from zfsnapper.common.zfs import Snapshot, ZfsCli
 from zfsnapper.common.utils import space
 from zfsnapper.common.parse_dataset_arg import ConnSpec
+from zfsnapper.common.resolve_datasets import ResolvedDatasets
 from .policy import apply_policy, KeepPolicy
 from .grouping import Grouper, apply_grouper, groupers
 
@@ -27,6 +28,9 @@ def prune_snapshots[G](
     snapshots: Collection[Snapshot],
     policy: KeepPolicy,
     *,
+    holds: dict[Snapshot, set[str]],
+    datasets: ResolvedDatasets,
+    all_snaps: Collection[Snapshot],
     conn: ConnSpec,
     grouper: Grouper[G] = groupers.NOGROUP,
     dry_run: bool,
@@ -46,7 +50,7 @@ def prune_snapshots[G](
     policy_result: dict[G, tuple[list[Snapshot], list[Snapshot]]] = {}
     groups = apply_grouper(snapshots, grouper)
     for groupkey, group in groups.items():
-        policy_result[groupkey] = apply_policy(group, policy)
+        policy_result[groupkey] = apply_policy(group, policy, holds=holds, datasets=datasets, all_snaps=all_snaps)
 
     # Print policy result
     print_policy_result(policy_result, grouper=grouper)

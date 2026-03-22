@@ -5,7 +5,7 @@ from collections.abc import Collection
 
 from zfsnapper.common.zfs import ZfsProperty, ZfsCli, Dataset, Snapshot
 from zfsnapper.common.resolve_datasets import ResolvedDatasets
-from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
+from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_holds
 from zfsnapper.common.filter import SnapFilter
 from zfsnapper.common.parse_dataset_arg import ConnSpec
 
@@ -36,7 +36,8 @@ def entrypoint(args: Args):
         within_yearly = args.keep_within_yearly,
 
         name = args.keep_name,
-        tags = frozenset(args.keep_tag)
+        tags = frozenset(args.keep_tag),
+        after_peerhold = args.keep_after_peerhold
     )
 
     # Determine grouper
@@ -80,15 +81,20 @@ def prune_conn(
     dry_run: bool
 ):
     # Fetch all snapshots for all datasets
-    snaps = fetch_snaps(cli, datasets, filter=filter)
+    snaps = fetch_snaps(cli, datasets)
     if not snaps:
         log.info(f"[{conn}] No matching snapshots, nothing to do")
         return
 
+    holds = get_holds(cli, snaps)
+
     prune_snapshots(
         cli,
-        snaps,
+        filter.apply(snaps),
         policy,
+        holds=holds,
+        datasets=datasets,
+        all_snaps=snaps,
         conn=conn,
         dry_run=dry_run,
         grouper=grouper,

@@ -29,6 +29,7 @@ class Args(CommonArgs):
     keep_name: re.Pattern
     group_by: str
     keep_tag: list[str]
+    keep_after_peerhold: int
 
     allow_destroy_all: bool
 
@@ -64,7 +65,16 @@ def setup(parser: ArgumentParser) -> None:
     parser.add_argument('--keep-name', type=re.compile, metavar="REGEX")
     parser.add_argument('--group-by', type=str, metavar='GROUP', choices={'', 'dataset'}, default='dataset')
     parser.add_argument('--keep-tag', type=str, action='append', default=[])
-
+    parser.add_argument(
+        '--keep-after-peerhold',
+        type=int,
+        default=0,
+        help=(
+            "Keep N snapshots after each peer hold. "
+            "This may be useful in case a push to a remote host has been interrupted and the tags have not yet been set, "
+            "so that the next push may repair the tags from the source snapshots."
+        )
+    )
     # filter snapshots by name
     parser.add_argument('snapshot', nargs='*', type=str)
 
