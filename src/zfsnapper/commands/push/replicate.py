@@ -99,14 +99,10 @@ def replicate(
         dest.holdtag = Peering(Direction.RECEIVE, source.dataset.guid).to_tag()
 
         # Create holds
-        f1 = thread_exc.submit(add_hold, source.cli, source.base_snap, source.holdtag)
-        f2 = thread_exc.submit(add_hold, dest.cli, dest.base_snap, dest.holdtag)
+        f1 = thread_exc.submit(add_hold, source.cli, source.base_snap, source.holdtag, holds=source.holds)
+        f2 = thread_exc.submit(add_hold, dest.cli, dest.base_snap, dest.holdtag, holds=dest.holds)
         f1.result()
         f2.result()
-        source.base_snap.num_holds += 1
-        source.holds[source.base_snap].add(source.holdtag)
-        dest.base_snap.num_holds += 1
-        dest.holds[dest.base_snap].add(dest.holdtag)
 
         just_created_dest = True
 
@@ -284,11 +280,10 @@ def _transfer_batch(
     - First batch snap must be held
     - After, the last batch snap is held
 
-    In worst case, tags are set only after entire batch has been sent.
+    Tags are set only after entire batch has been sent.
     """
     assert is_set(source.snaps) and is_set(dest.snaps)
     assert is_set(source.holds) and is_set(dest.holds)
-    assert is_set(source.dataset)
     assert is_set(source.holdtag) and is_set(dest.holdtag)
 
     def _s(level: int = 0):
@@ -297,8 +292,12 @@ def _transfer_batch(
     batch_first = batch[0][0]
     batch_last = batch[-1][1]
 
+    # Create holds for all snaps we are about to send.
+    # If the send fails before tags were set, the source snaps won't get destroyed and can be used for repairing tags on next push.
+    add_hold(source.cli, [s for _, s in batch], source.holdtag, holds=source.holds)
+
     # Determine whether snapshots in the batch are consecutive
-    _snaps = [batch_first] + [p[1] for p in batch]
+    _snaps = [batch_first] + [s for _, s in batch]
     is_consecutive = is_subsequence(list(reversed(_snaps)), source.snaps)
 
     if is_consecutive:
@@ -324,25 +323,14 @@ def _transfer_batch(
     batch_first_dest = next(iter(s for s in dest.snaps if s.guid == batch_first.guid))
     batch_last_dest = next(iter(s for s in dest.snaps if s.guid == batch_last.guid))
 
-    # Create new holds in parallel
-    f1 = thread_exc.submit(add_hold, source.cli, batch_last, source.holdtag)
-    f2 = thread_exc.submit(add_hold, dest.cli, batch_last_dest, dest.holdtag)
-    f1.result()
-    f2.result()
-    batch_last.num_holds += 1
-    source.holds[batch_last].add(source.holdtag)
-    batch_last_dest.num_holds += 1
-    dest.holds[batch_last_dest].add(dest.holdtag)
+    # Hold latest snap on dest
+    add_hold(dest.cli, batch_last_dest, dest.holdtag, holds=dest.holds)
 
-    # Rrelease old holds in parallel
-    f3 = thread_exc.submit(release_hold, source.cli, batch_first, source.holdtag)
-    f4 = thread_exc.submit(release_hold, dest.cli, batch_first_dest, dest.holdtag)
+    # Release old holds in parallel
+    f3 = thread_exc.submit(release_hold, source.cli, [s for s, _ in batch], source.holdtag, holds=source.holds)
+    f4 = thread_exc.submit(release_hold, dest.cli, batch_first_dest, dest.holdtag, holds=dest.holds)
     f3.result()
     f4.result()
-    batch_first.num_holds -= 1
-    source.holds[batch_first].remove(source.holdtag)
-    batch_first_dest.num_holds -= 1
-    dest.holds[batch_first_dest].remove(dest.holdtag)
 
 
 def _send_receive(

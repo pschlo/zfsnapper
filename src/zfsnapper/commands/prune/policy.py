@@ -50,7 +50,7 @@ class KeepPolicy:
 
     name: Optional[re.Pattern] = None
     tags: frozenset[str] = frozenset()
-    after_peerhold: int = 0
+    keep_sendbuffer: int = 0
 
 
 def unique_bucket(_: datetime) -> int:
@@ -115,18 +115,20 @@ def apply_policy(snapshots: Collection[Snapshot], policy: KeepPolicy, *, holds: 
             keep_snap = True
 
         """
-        Keep after peer holds.
+        Keep before peer holds.
         1. Determine peers
         2. For each peer, check where the holds are
         3. Check whether this snap is at most N away from any hold
         """
         for peer in ds_to_peers[snap.dataset]:
+            if peer.direction != Direction.SEND:
+                continue
             held_snaps = ds_peer_to_holds[(snap.dataset, peer)]
             for held_snap in held_snaps:
                 # Check whether we are at most n away from hold
                 held_idx = next(iter(i for i, s in enumerate(ds_to_snaps[snap.dataset]) if s.guid == held_snap.guid))
                 our_idx = next(iter(i for i, s in enumerate(ds_to_snaps[snap.dataset]) if s.guid == snap.guid))
-                if our_idx < held_idx and held_idx - our_idx <= policy.after_peerhold:
+                if 0 <= our_idx - held_idx <= policy.keep_sendbuffer - 1:
                     keep_snap = True
 
         # keep matching tag

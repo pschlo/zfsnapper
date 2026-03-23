@@ -29,7 +29,7 @@ class Args(CommonArgs):
     keep_name: re.Pattern
     group_by: str
     keep_tag: list[str]
-    keep_after_peerhold: int
+    keep_sendbuffer: int
 
     allow_destroy_all: bool
 
@@ -64,16 +64,18 @@ def setup(parser: ArgumentParser) -> None:
         parser.add_argument(opt, type=parse_duration, metavar="DURATION", default=relativedelta())
     parser.add_argument('--keep-name', type=re.compile, metavar="REGEX")
     parser.add_argument('--group-by', type=str, metavar='GROUP', choices={'', 'dataset'}, default='dataset')
-    parser.add_argument('--keep-tag', type=str, action='append', default=[])
+    parser.add_argument('--keep-tag', type=str, action='append', metavar="TAG", default=[])
     parser.add_argument(
-        '--keep-after-peerhold',
+        '--keep-sendbuffer',
         type=int,
         metavar="N",
         default=0,
         help=(
-            "Keep N snapshots after each send-to-peer hold. "
-            "This may be useful in case a push to a remote host has been interrupted and the tags have not yet been set, "
-            "so that the next push may repair the tags from the source snapshots."
+            "Keep N snapshots before or at each send-to-peer hold.\n\n"
+            "Improves tag consistency when forwarding snapshots between hosts.\n\n"
+            "If a receive was interrupted (tags UNSET) and incomplete snapshots were "
+            "already forwarded, this keeps them so the tags can be forwarded after they are fixed.\n\n"
+            "Recommended to be at least the batch size used during receive."
         )
     )
     # filter snapshots by name

@@ -37,5 +37,5 @@ def setup(parser: ArgumentParser) -> None:
             "'clear' = use plain send"
         ),
     )
-    parser.add_argument('--batch-size', type=int, default=1)
+    parser.add_argument('--batch-size', type=int, metavar="N", default=1)
     parser.add_argument('--localhost', type=str)
