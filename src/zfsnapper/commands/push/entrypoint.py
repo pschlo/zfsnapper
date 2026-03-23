@@ -23,6 +23,8 @@ log = logging.getLogger(__name__)
 
 def entrypoint(args: Args) -> None:
     assert args.enc_mode in (EncryptionMode.KEEP, EncryptionMode.CLEAR)
+    if args.batch_size < 1:
+        raise ValueError(f"Batch size must be at least 1")
 
     snap_filter = resolve_filter_args(match_tag_groups=args.tag, exclude_tag_groups=args.exclude_tag)
     src_resolved = resolve_dataset_args(args)
