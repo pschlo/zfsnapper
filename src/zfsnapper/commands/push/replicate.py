@@ -116,6 +116,9 @@ def replicate(
         # Ensure sorting
         dest.snaps.sort(key=sortkey_snap_by_time, reverse=True)
 
+        # Try to repair dest snaps with unset tags.
+        repair_dest_snaps(source, dest, log_indent=log_indent)
+
         # Determine holdtags
         source.holdtag = Peering(Direction.SEND, dest.dataset.guid).to_tag()
         dest.holdtag = Peering(Direction.RECEIVE, source.dataset.guid).to_tag()
@@ -123,7 +126,7 @@ def replicate(
         # Determine base snap
         source.base_snap, dest.base_snap = find_latest_common(source, dest)
 
-        # Optimize holds
+        # Ensure hold is at base snap
         ensure_holds(source, dest, log_indent=log_indent)
 
         # Validate base snap
@@ -131,17 +134,6 @@ def replicate(
             raise ReplicationError(f"Source '{source.path}' and destination '{dest.path}' have no common snapshots", log_indent=log_indent)
         if dest.base_snap.guid != dest.snaps[0].guid:
             raise ReplicationError(f"Destination '{dest.path}' has snapshots newer than latest common snapshot '{dest.base_snap.shortname}'", log_indent=log_indent)
-
-        # Try to repair all snaps with unset tags.
-        # For each snap that has tags set on source but UNSET on dest, set on dest.
-        _src_guid_to_snap = {s.guid: s for s in source.snaps}
-        for dest_snap in dest.snaps:
-            repair_tags(
-                dest_snap,
-                src_guid_to_snap=_src_guid_to_snap,
-                dest_cli=dest.cli,
-                log_indent=log_indent
-            )
 
         # Optionally rollback dest
         if rollback:
@@ -406,7 +398,21 @@ def check_timestamp_conflicts(source: DatasetSide, dest: DatasetSide, transfer_s
             )
 
 
-def repair_tags(dest_snap: Snapshot, src_guid_to_snap: dict[int, Snapshot], dest_cli: ZfsCli, log_indent: int = 0):
+def repair_dest_snaps(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
+    """For each snap that has tags set on source but UNSET on dest, set on dest."""
+    assert is_set(source.snaps) and is_set(dest.snaps)
+
+    src_guid_to_snap = {s.guid: s for s in source.snaps}
+    for dest_snap in dest.snaps:
+        _repair_snap(
+            dest_snap,
+            src_guid_to_snap=src_guid_to_snap,
+            dest_cli=dest.cli,
+            log_indent=log_indent
+        )
+
+
+def _repair_snap(dest_snap: Snapshot, src_guid_to_snap: dict[int, Snapshot], dest_cli: ZfsCli, log_indent: int = 0):
     def _s(level: int = 0):
         return space(log_indent + level)
 

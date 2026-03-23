@@ -29,7 +29,7 @@ class Args(CommonArgs):
     keep_name: re.Pattern
     group_by: str
     keep_tag: list[str]
-    keep_after_sendhold: int
+    keep_after_peerhold: int
 
     allow_destroy_all: bool
 
@@ -66,7 +66,7 @@ def setup(parser: ArgumentParser) -> None:
     parser.add_argument('--group-by', type=str, metavar='GROUP', choices={'', 'dataset'}, default='dataset')
     parser.add_argument('--keep-tag', type=str, action='append', default=[])
     parser.add_argument(
-        '--keep-after-sendhold',
+        '--keep-after-peerhold',
         type=int,
         metavar="N",
         default=0,

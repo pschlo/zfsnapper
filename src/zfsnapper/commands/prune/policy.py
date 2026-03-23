@@ -121,9 +121,6 @@ def apply_policy(snapshots: Collection[Snapshot], policy: KeepPolicy, *, holds: 
         3. Check whether this snap is at most N away from any hold
         """
         for peer in ds_to_peers[snap.dataset]:
-            # Only applies to sendto-peers
-            if peer.direction != Direction.SEND:
-                continue
             held_snaps = ds_peer_to_holds[(snap.dataset, peer)]
             for held_snap in held_snaps:
                 # Check whether we are at most n away from hold
