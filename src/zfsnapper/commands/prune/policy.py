@@ -50,7 +50,7 @@ class KeepPolicy:
 
     name: Optional[re.Pattern] = None
     tags: frozenset[str] = frozenset()
-    keep_sendbuffer: int = 0
+    keep_relay_buffer: int = 0
 
 
 def unique_bucket(_: datetime) -> int:
@@ -128,7 +128,7 @@ def apply_policy(snapshots: Collection[Snapshot], policy: KeepPolicy, *, holds: 
                 # Check whether we are at most n away from hold
                 held_idx = next(iter(i for i, s in enumerate(ds_to_snaps[snap.dataset]) if s.guid == held_snap.guid))
                 our_idx = next(iter(i for i, s in enumerate(ds_to_snaps[snap.dataset]) if s.guid == snap.guid))
-                if 0 <= our_idx - held_idx <= policy.keep_sendbuffer - 1:
+                if 0 <= our_idx - held_idx <= policy.keep_relay_buffer - 1:
                     keep_snap = True
 
         # keep matching tag

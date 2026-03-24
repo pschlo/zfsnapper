@@ -37,7 +37,7 @@ def entrypoint(args: Args):
 
         name = args.keep_name,
         tags = frozenset(args.keep_tag),
-        keep_sendbuffer = args.keep_sendbuffer
+        keep_relay_buffer = args.keep_relay_buffer
     )
 
     # Determine grouper

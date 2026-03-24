@@ -29,7 +29,7 @@ class Args(CommonArgs):
     keep_name: re.Pattern
     group_by: str
     keep_tag: list[str]
-    keep_sendbuffer: int
+    keep_relay_buffer: int
 
     allow_destroy_all: bool
 
@@ -66,7 +66,7 @@ def setup(parser: ArgumentParser) -> None:
     parser.add_argument('--group-by', type=str, metavar='GROUP', choices={'', 'dataset'}, default='dataset')
     parser.add_argument('--keep-tag', type=str, action='append', metavar="TAG", default=[])
     parser.add_argument(
-        '--keep-sendbuffer',
+        '--keep-relay-buffer',
         type=int,
         metavar="N",
         default=0,
