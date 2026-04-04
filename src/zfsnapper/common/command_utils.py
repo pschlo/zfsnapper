@@ -69,36 +69,14 @@ def fetch_snaps(
     cli: ZfsCli,
     datasets: ResolvedDatasets,
     props: Collection[str] = [],
-    filter: SnapFilter = snapfilters.ALLOW_ALL
+    filter: SnapFilter = snapfilters.ALLOW_ALL,
+    ignore_holdtags: bool = False
 ):
     """Fetch all snapshots of the given `datasets`.
 
     Snapshots are sorted by creation time (ascending order) and optionally filtered.
     """
-    snaps = cli.get_all_snapshots(datasets.p.matched, properties=props)
+    snaps = cli.get_snapshots(datasets.p.matched, properties=props, holdtags=not ignore_holdtags)
     snaps = filter.apply(snaps)
     snaps = sorted(snaps, key=sortkey_snap_by_time)
     return snaps
-
-
-def get_holds(cli: ZfsCli, snapshots: Collection[Snapshot]) -> dict[Snapshot, set[str]]:
-    tags = cli.get_holdtags([s.longname for s in snapshots], userrefs={s.longname: s.num_holds for s in snapshots})
-    return {s: tags[s.longname] for s in snapshots}
-
-
-def add_hold(cli: ZfsCli, snaps: Snapshot | Collection[Snapshot], holdtag: str, holds: dict[Snapshot, set[str]]):
-    if isinstance(snaps, Snapshot):
-        snaps = [snaps]
-    cli.hold([s.longname for s in snaps], holdtag)
-    for s in snaps:
-        s.num_holds += 1
-        holds[s].add(holdtag)
-
-
-def release_hold(cli: ZfsCli, snaps: Snapshot | Collection[Snapshot], holdtag: str, holds: dict[Snapshot, set[str]]):
-    if isinstance(snaps, Snapshot):
-        snaps = [snaps]
-    cli.release_hold([s.longname for s in snaps], holdtag)
-    for s in snaps:
-        s.num_holds -= 1
-        holds[s].remove(holdtag)

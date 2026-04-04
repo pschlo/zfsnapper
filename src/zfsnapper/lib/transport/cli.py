@@ -84,6 +84,19 @@ class ZfsCli:
         return holds
 
     @overload
+    def with_holdtags(self, snaps: Snapshot) -> Snapshot: ...
+    @overload
+    def with_holdtags(self, snaps: Collection[Snapshot]) -> list[Snapshot]: ...
+    def with_holdtags(self, snaps: Snapshot | Collection[Snapshot]) -> Snapshot | list[Snapshot]:
+        if isinstance(snaps, Snapshot):
+            tags = self.get_holdtags(snaps)
+            return snaps.with_holdtags(tags)
+
+        tags = self.get_holdtags(snaps)
+        return [s.with_holdtags(tags[s]) for s in snaps]
+
+
+    @overload
     def get_holdtags(self, snaps: Collection[str]) -> dict[str, set[str]]: ...
     @overload
     def get_holdtags(self, snaps: Collection[Snapshot]) -> dict[Snapshot, set[str]]: ...
@@ -105,31 +118,47 @@ class ZfsCli:
             tags = {s: {h.tag for h in holds} for s, holds in snapname_to_holds.items()}
             return {s: tags[s.longname] for s in snaps}
 
+
     def add_hold(self, snaps: T_Snap | T_Snaps, tag: str) -> list[Snapshot]:
         self._zfs.hold(
             snapshots_fullnames=_normalize_names(snaps),
             tag=tag
         )
-        return [
-            s.with_num_holds(s.num_holds + 1)
-            for s in _filter_snaps(snaps)
-        ]
+
+        new_snaps = []
+        for s in _filter_snaps(snaps):
+            if tag in s.holdtags:
+                # Nothing changed
+                continue
+            new_snap = (
+                s
+                .with_num_holds(s.num_holds + 1)
+                .with_holdtags(s.holdtags | {tag})
+            )
+            new_snaps.append(new_snap)
+        return new_snaps
 
     def release_hold(self, snaps: T_Snap | T_Snaps, tag: str) -> list[Snapshot]:
         self._zfs.release(
             snapshots_fullnames=_normalize_names(snaps),
             tag=tag
         )
-        return [
-            s.with_num_holds(s.num_holds - 1)
-            for s in _filter_snaps(snaps)
-        ]
+
+        new_snaps = []
+        for s in _filter_snaps(snaps):
+            new_snap = (
+                s
+                .with_num_holds(s.num_holds - 1)
+                .with_holdtags(s.holdtags - {tag})
+            )
+            new_snaps.append(new_snap)
+        return new_snaps
 
     def get_pools(
         self,
         poolnames: T_Pool | T_Pools | None = None,
         properties: Collection[str] = []
-    ) -> set[Pool]:
+    ) -> list[Pool]:
         # Inject required properties
         properties = [*REQUIRED_POOL_PROPS, *properties]
 
@@ -138,7 +167,7 @@ class ZfsCli:
             targets=_normalize_names(poolnames)
         )
         pool_to_props = group_by(fetched_props, key=lambda p: p.objname)
-        pools = {Pool.from_props(props) for props in pool_to_props.values()}
+        pools = [Pool.from_props(props) for props in pool_to_props.values()]
         return pools
 
     def get_datasets(
@@ -146,7 +175,7 @@ class ZfsCli:
         paths: T_Dataset | T_Datasets | None = None,
         properties: Collection[str] = [],
         recursive: bool = False
-    ) -> set[Dataset]:
+    ) -> list[Dataset]:
         # Inject required properties
         properties = [*REQUIRED_DATASET_PROPS, *properties]
 
@@ -157,7 +186,7 @@ class ZfsCli:
             recursive=recursive
         )
         ds_to_props = group_by(fetched_props, key=lambda p: p.objname)
-        datasets = {Dataset.from_props(props) for props in ds_to_props.values()}
+        datasets = [Dataset.from_props(props) for props in ds_to_props.values()]
         return datasets
 
     def create_snapshot(
@@ -185,7 +214,8 @@ class ZfsCli:
         datasets: T_Dataset | T_Datasets | None = None,
         properties: Collection[str] = [],
         recursive: bool = False,
-    ) -> set[Snapshot]:
+        holdtags: bool = False
+    ) -> list[Snapshot]:
         # Inject required properties
         properties = [*REQUIRED_SNAP_PROPS, *properties]
 
@@ -196,7 +226,11 @@ class ZfsCli:
             recursive=recursive,
         )
         snap_to_props = group_by(fetched_props, key=lambda p: p.objname)
-        snaps = {Snapshot.from_props(props) for props in snap_to_props.values()}
+        snaps = [Snapshot.from_props(props) for props in snap_to_props.values()]
+
+        if holdtags:
+            snaps = self.with_holdtags(snaps)
+
         return snaps
 
     def set_properties(self, objects: T_Snap | T_Snaps | T_Dataset | T_Datasets, props_values: dict[str, str]) -> None:

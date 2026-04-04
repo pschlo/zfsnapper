@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from collections.abc import Collection
 from enum import StrEnum
 from datetime import datetime
@@ -44,6 +44,8 @@ class Snapshot:
     properties: dict[str, Property]
     """Properties as fetched from ZFS; may be outdated."""
 
+    holdtags: set[str]
+
     def __repr__(self) -> str:
         return f"Snapshot({self.longname})"
 
@@ -70,7 +72,8 @@ class Snapshot:
             timestamp=timestamp,
             tags=tags,
             num_holds=num_holds,
-            properties=ps
+            properties=ps,
+            holdtags=set()
         )
 
     @property
@@ -85,7 +88,8 @@ class Snapshot:
             timestamp=self.timestamp,
             tags=self.tags,
             num_holds=self.num_holds,
-            properties=self.properties
+            properties=self.properties,
+            holdtags=self.holdtags
         )
 
     def with_shortname(self, shortname: str) -> Snapshot:
@@ -96,7 +100,8 @@ class Snapshot:
             timestamp=self.timestamp,
             tags=self.tags,
             num_holds=self.num_holds,
-            properties=self.properties
+            properties=self.properties,
+            holdtags=self.holdtags
         )
     
     def with_num_holds(self, num_holds: int) -> Snapshot:
@@ -107,7 +112,20 @@ class Snapshot:
             timestamp=self.timestamp,
             tags=self.tags,
             num_holds=num_holds,
-            properties=self.properties
+            properties=self.properties,
+            holdtags=self.holdtags
+        )
+
+    def with_holdtags(self, holdtags: Collection[str]) -> Snapshot:
+        return Snapshot(
+            dataset=self.dataset,
+            shortname=self.shortname,
+            guid=self.guid,
+            timestamp=self.timestamp,
+            tags=self.tags,
+            num_holds=self.num_holds,
+            properties=self.properties,
+            holdtags=set(holdtags)
         )
 
 
