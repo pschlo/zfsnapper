@@ -45,13 +45,13 @@ def parse_property_source(source: str) -> PropertySource:
 
 
 @dataclass(eq=True, frozen=True)
-class Hold:
+class RawHold:
     snap_longname: str
     tag: str
 
     @classmethod
     def from_raw(cls, name: str, tag: str):
-        return Hold(
+        return RawHold(
             snap_longname=name,
             tag=tag
         )

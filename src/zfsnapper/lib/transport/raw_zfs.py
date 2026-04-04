@@ -4,7 +4,7 @@ from itertools import batched
 from typing import IO, overload
 
 from .transport import CommandRunner
-from .cli_model import Property, Hold
+from .cli_model import Property, RawHold
 from zfsnapper.common.utils import group_by
 
 from .raw_common import _is_empty, _normalize_str
@@ -93,19 +93,16 @@ class RawZfs:
             props.append(Property.from_raw(name, property, value, source))
         return props
 
-    def holds(self, snapshots_fullnames: str | Collection[str]) -> list[Hold]:
+    def holds(self, snapshots_fullnames: str | Collection[str]) -> list[RawHold]:
         snapshots_fullnames = _normalize_str(snapshots_fullnames)
         if _is_empty(snapshots_fullnames):
             return []
 
-        all_lines: list[str] = []
-        for batch in batched(snapshots_fullnames, 5000):  # limit how many snapshots can be processed in a single command
-            all_lines += self._runner.run_text_command(['zfs', 'holds', '-H', *batch]).splitlines()
-
-        holds: list[Hold] = []
-        for line in all_lines:
+        lines = self._runner.run_text_command(['zfs', 'holds', '-H', *snapshots_fullnames]).splitlines()
+        holds: list[RawHold] = []
+        for line in lines:
             name, tag, timestamp = line.split('\t')
-            holds.append(Hold.from_raw(name, tag))
+            holds.append(RawHold.from_raw(name, tag))
         return holds
 
     def hold(self, snapshots_fullnames: str | Collection[str], tag: str) -> None:

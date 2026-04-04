@@ -1,11 +1,12 @@
 from collections.abc import Collection
 from subprocess import Popen
+from itertools import batched
 import logging
 from typing import IO, cast, overload, TypeGuard, Any, Union
 
 from .raw_zfs import RawZfs
 from .raw_zpool import RawZpool
-from .cli_model import ZfsDatasetType
+from .cli_model import ZfsDatasetType, RawHold
 from .domain_model import Snapshot, Dataset, Hold, Pool, REQUIRED_DATASET_PROPS, REQUIRED_SNAP_PROPS, REQUIRED_POOL_PROPS, PropertyName, PeeringInfo, Peering
 
 from zfsnapper.common.utils import group_by, space
@@ -70,11 +71,14 @@ class ZfsCli:
         snaps = _as_snap_container(snaps)
         if _is_container_type(snaps, Snapshot):
             snaps = [s for s in snaps if s.num_holds > 0]
-        _holds = self._zfs.holds(
-            _normalize_names(snaps)
-        )
+
+        _raw_holds: list[RawHold] = []
+        for batch in batched(snaps, 5000):  # arbitrary limit how many snapshots can be processed in a single command
+            batch = cast(T_Snaps, batch)
+            _raw_holds += self._zfs.holds(_normalize_names(batch))
+
         holds: set[Hold] = set()
-        for h in _holds:
+        for h in _raw_holds:
             dataset, shortname = h.snap_longname.split('@')
             holds.add(Hold(
                 dataset=Path(dataset),
