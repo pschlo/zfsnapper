@@ -4,7 +4,7 @@ from typing import cast, overload, TypeGuard
 from .model import Snapshot, Dataset, Pool
 from . import typedefs as T
 
-from zfsnapper.common.path import Path
+from zfsnapper.lib.zfs import Path
 
 
 def _normalize_name(name: T.AnySingle) -> str:
@@ -40,6 +40,9 @@ def _as_snap_container(v: T.Snap | T.Snaps) -> T.Snaps:
     if isinstance(v, T.Snap):
         return cast(T.Snaps, [v])
     return v
+
+def _is_container(v) -> TypeGuard[T.AnyCollection]:
+    return not isinstance(v, T.AnySingle)
 
 def _is_container_type[V](v: T.AnyCollection, typ: type[V]) -> TypeGuard[Collection[V]]:
     try:

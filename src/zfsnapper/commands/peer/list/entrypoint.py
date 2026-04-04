@@ -3,14 +3,14 @@ from typing import cast, Optional, TYPE_CHECKING
 import logging
 from collections.abc import Collection
 
-from zfsnapper.lib import ZfsCli, Dataset
-from zfsnapper.common.resolve_datasets import ResolvedDatasets
-from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args
-from zfsnapper.common.parse_dataset_arg import ConnSpec
-from zfsnapper.common.sort import sortkey_dataset, sortkey_peering
-from zfsnapper.common.utils import sort_dict, space
+from zfsnapper.lib.zfs import ZfsCli, Dataset
+from zfsnapper.lib.cli.resolve_datasets import ResolvedDatasets
+from zfsnapper.lib.cli.command_utils import fetch_snaps, resolve_dataset_args
+from zfsnapper.lib.cli.parse_dataset_arg import ConnSpec
+from zfsnapper.lib.cli.sortkey import sortkey_dataset, sortkey_peering
+from zfsnapper.lib.cli.utils import sort_dict, space
 from zfsnapper.common.replication.utils import Direction, Peering
-from zfsnapper.common.render_table import render_table, Field, VERTICAL_BAR
+from zfsnapper.lib.cli.render_table import render_table, Field, VERTICAL_BAR
 
 from ..common.get_peers import get_peers
 

@@ -4,7 +4,7 @@ from typing import IO
 
 from ..transport import CommandRunner
 from .model import Property, RawHold
-from zfsnapper.common.utils import group_by
+from zfsnapper.lib.cli.utils import group_by
 
 from .common import _is_empty, _normalize_str
 

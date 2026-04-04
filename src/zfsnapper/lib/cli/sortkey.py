@@ -1,10 +1,8 @@
 from collections.abc import Collection
 from typing import cast
 
-from zfsnapper.lib import Snapshot, Dataset
-from zfsnapper.common.parse_dataset_arg import ConnSpec
-from zfsnapper.common.path import Path
-from zfsnapper.common.replication.utils import Peering
+from zfsnapper.lib.zfs import Snapshot, Dataset, Path, Peering
+from zfsnapper.lib.cli.parse_dataset_arg import ConnSpec
 
 
 def sortkey_snap_by_time(snap: Snapshot):

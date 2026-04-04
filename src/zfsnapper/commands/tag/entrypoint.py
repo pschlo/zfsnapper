@@ -3,11 +3,11 @@ from typing import Optional, cast, Literal, Callable
 from collections.abc import Collection
 import logging
 
-from zfsnapper.lib import Snapshot, ZfsCli
-from zfsnapper.common.resolve_datasets import ResolvedDatasets
-from zfsnapper.common.filter import SnapFilter
-from zfsnapper.common.utils import space, group_by
-from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
+from zfsnapper.lib.zfs import Snapshot, ZfsCli
+from zfsnapper.lib.cli.resolve_datasets import ResolvedDatasets
+from zfsnapper.lib.cli.snapfilter import SnapFilter
+from zfsnapper.lib.cli.utils import space, group_by
+from zfsnapper.lib.cli.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
 from .args import Args
 
 

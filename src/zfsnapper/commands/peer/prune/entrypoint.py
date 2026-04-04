@@ -4,15 +4,15 @@ from dateutil.relativedelta import relativedelta
 from datetime import datetime
 
 from .args import Args
-from zfsnapper.lib import ZfsCli, Dataset, Pool
-from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args
-from zfsnapper.common.resolve_datasets import resolve_dataset_specs, combine_dicts
-from zfsnapper.common.parse_dataset_arg import parse_dataset_arg
-from zfsnapper.common.parse_dataset_arg import ConnSpec, DatasetSpec, Path
-from zfsnapper.common.sort import sortkey_dataset
-from zfsnapper.common.utils import group_by, space
-from zfsnapper.common.resolve_datasets import ResolvedDatasets
-from zfsnapper.common.parse_duration import parse_duration
+from zfsnapper.lib.zfs import ZfsCli, Dataset, Pool
+from zfsnapper.lib.cli.command_utils import fetch_snaps, resolve_dataset_args
+from zfsnapper.lib.cli.resolve_datasets import resolve_dataset_specs, combine_dicts
+from zfsnapper.lib.cli.parse_dataset_arg import parse_dataset_arg
+from zfsnapper.lib.cli.parse_dataset_arg import ConnSpec, DatasetSpec, Path
+from zfsnapper.lib.cli.sortkey import sortkey_dataset
+from zfsnapper.lib.cli.utils import group_by, space
+from zfsnapper.lib.cli.resolve_datasets import ResolvedDatasets
+from zfsnapper.lib.cli.parse_duration import parse_duration
 from zfsnapper.common.replication.utils import Peering, Direction
 
 from ..common.get_peers import get_peers

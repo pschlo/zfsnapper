@@ -5,12 +5,12 @@ from collections.abc import Collection, Mapping
 import logging
 
 from .args import Args
-from zfsnapper.lib import Snapshot, ZfsCli, PeeringInfo, Dataset, Peering
-from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
-from zfsnapper.common.filter import SnapFilter
-from zfsnapper.common.resolve_datasets import ResolvedDatasets
+from zfsnapper.lib.zfs import Snapshot, ZfsCli, PeeringInfo, Dataset, Peering
+from zfsnapper.lib.cli.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
+from zfsnapper.lib.cli.snapfilter import SnapFilter
+from zfsnapper.lib.cli.resolve_datasets import ResolvedDatasets
 from zfsnapper.common.replication.utils import parse_holdtags, Direction
-from zfsnapper.common.render_table import render_table, Field
+from zfsnapper.lib.cli.render_table import render_table, Field
 
 
 log = logging.getLogger(__name__)

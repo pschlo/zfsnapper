@@ -1,14 +1,14 @@
 from __future__ import annotations
 import logging
 
-from zfsnapper.lib import ZfsCli, Hold, Snapshot
+from zfsnapper.lib.zfs import ZfsCli, Hold, Snapshot
 from .args import Args
-from zfsnapper.common.filter import SnapFilter
-from zfsnapper.common.path import Path
-from zfsnapper.common.resolve_datasets import ResolvedDatasets
-from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
-from zfsnapper.common.utils import space, group_by, sort_dict
-from zfsnapper.common.sort import sortkey_dataset, sortkey_snap_by_time
+from zfsnapper.lib.cli.snapfilter import SnapFilter
+from zfsnapper.lib.zfs.domain.model.path import Path
+from zfsnapper.lib.cli.resolve_datasets import ResolvedDatasets
+from zfsnapper.lib.cli.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
+from zfsnapper.lib.cli.utils import space, group_by, sort_dict
+from zfsnapper.lib.cli.sortkey import sortkey_dataset, sortkey_snap_by_time
 
 
 log = logging.getLogger(__name__)

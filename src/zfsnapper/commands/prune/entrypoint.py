@@ -3,11 +3,11 @@ from typing import cast, Optional, TYPE_CHECKING
 import logging
 from collections.abc import Collection
 
-from zfsnapper.lib import PropertyName, ZfsCli, Dataset, Snapshot
-from zfsnapper.common.resolve_datasets import ResolvedDatasets
-from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
-from zfsnapper.common.filter import SnapFilter
-from zfsnapper.common.parse_dataset_arg import ConnSpec
+from zfsnapper.lib.zfs import PropertyName, ZfsCli, Dataset, Snapshot
+from zfsnapper.lib.cli.resolve_datasets import ResolvedDatasets
+from zfsnapper.lib.cli.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
+from zfsnapper.lib.cli.snapfilter import SnapFilter
+from zfsnapper.lib.cli.parse_dataset_arg import ConnSpec
 
 from .policy import KeepPolicy
 from .prune_snaps import prune_snapshots

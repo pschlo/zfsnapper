@@ -1,14 +1,13 @@
 from collections.abc import Collection
 
 from . import model
-from zfsnapper.common.path import Path
 
 
 Snap = str | model.Snapshot
 Snaps = Collection[str] | Collection[model.Snapshot]
 
-Dataset = str | Path | model.Dataset
-Datasets = Collection[str] | Collection[Path] | Collection[model.Dataset]
+Dataset = str | model.Path | model.Dataset
+Datasets = Collection[str] | Collection[model.Path] | Collection[model.Dataset]
 
 Pool = str | model.Pool
 Pools = Collection[str] | Collection[model.Pool]

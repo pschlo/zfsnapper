@@ -5,8 +5,8 @@ from .model import (
     Pool,
     Hold,
     Path,
-    Peering,
-    PeerField,
     PeeringInfo,
-    PropertyName
+    Peering,
+    PropertyName,
+    Direction
 )

@@ -1,22 +1,20 @@
 from __future__ import annotations
 import logging
-from typing import TypeAlias, Literal, TypeGuard, Any, overload
 from dataclasses import dataclass
-from enum import Enum, StrEnum
+from enum import StrEnum
 from itertools import pairwise, batched
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
-from zfsnapper.common.replication import ReplicationError
-from zfsnapper.common.replication.send_receive import send_receive
-from zfsnapper.common.parse_dataset_arg import ConnSpec
-from zfsnapper.common.filter import SnapFilter, snapfilters
-from zfsnapper.common.path import Path
-from zfsnapper.common.sort import sortkey_snap_by_time
-from zfsnapper.lib import ZfsCli, Dataset, PeeringInfo, Snapshot, ZfsDatasetType, PropertyName, Pool
-from zfsnapper.common.utils import space, is_subsequence, group_by, invert_dict
-from zfsnapper.common.replication.utils import Direction, Peering
-from zfsnapper.common.utils import NOT_SET, NotSet, is_set
+from .exception import ReplicationError
+from zfsnapper.commands.push.send_receive import send_receive
+from zfsnapper.lib.cli.parse_dataset_arg import ConnSpec
+from zfsnapper.lib.cli.snapfilter import SnapFilter
+from zfsnapper.lib.zfs import Path
+from zfsnapper.lib.cli.sortkey import sortkey_snap_by_time
+from zfsnapper.lib.zfs import ZfsCli, Dataset, PeeringInfo, Snapshot, ZfsDatasetType, PropertyName, Pool, Direction, Peering
+from zfsnapper.lib.cli.utils import space, is_subsequence, group_by
+from zfsnapper.lib.cli.utils import NOT_SET, NotSet, is_set
 
 
 log = logging.getLogger(__name__)
@@ -36,7 +34,6 @@ class DatasetSide:
     pool: Pool
     dataset: Dataset | NotSet = NOT_SET
     snaps: list[Snapshot] | NotSet = NOT_SET
-    holds: dict[Snapshot, set[str]] | NotSet = NOT_SET
     holdtag: str | NotSet = NOT_SET
     base_snap: Snapshot | None | NotSet = NOT_SET
 
@@ -57,7 +54,7 @@ def replicate(
     def _s(level: int = 0):
         return space(log_indent + level)
 
-    assert is_set(source.dataset) and is_set(source.snaps) and is_set(source.holds)
+    assert is_set(source.dataset) and is_set(source.snaps)
     if not source.snaps:
         log.info(_s() + f"Source has no matching snapshots")
         return
@@ -68,8 +65,8 @@ def replicate(
     # Flag to store whether we have just created/initialized the destination dataset
     just_created_dest: bool
 
-    if not is_set(dest.dataset) or not is_set(dest.snaps) or not is_set(dest.holds):
-        assert not is_set(dest.dataset) and not is_set(dest.snaps) and not is_set(dest.holds)
+    if not is_set(dest.dataset) or not is_set(dest.snaps):
+        assert not is_set(dest.dataset) and not is_set(dest.snaps)
 
         # Dest dataset does not exist; cannot fetch snapshots.
         if not allow_init:
@@ -82,7 +79,6 @@ def replicate(
         source.base_snap = initial_snap
         dest.base_snap = source.base_snap.with_dataset(dest.path)
         dest.snaps = [dest.base_snap]
-        dest.holds = {dest.base_snap: set()}
         dest.dataset = dest.cli.get_dataset(dest.path)
 
         # Determine holdtags
@@ -90,8 +86,8 @@ def replicate(
         dest.holdtag = Peering(Direction.RECEIVE, source.dataset.guid).to_tag()
 
         # Create holds
-        f1 = thread_exc.submit(add_hold, source.cli, source.base_snap, source.holdtag, holds=source.holds)
-        f2 = thread_exc.submit(add_hold, dest.cli, dest.base_snap, dest.holdtag, holds=dest.holds)
+        f1 = thread_exc.submit(source.cli.add_hold, source.base_snap, source.holdtag)
+        f2 = thread_exc.submit(dest.cli.add_hold, dest.base_snap, dest.holdtag)
         f1.result()
         f2.result()
 
@@ -125,20 +121,18 @@ def replicate(
         # Optionally rollback dest
         if rollback:
             log.info(_s() + f"Rolling back destination to latest snapshot")
-            dest.cli.rollback(dest.snaps[0].longname)
+            dest.cli.rollback(dest.snaps[0])
 
 
     # Update peer information
     f1 = thread_exc.submit(
-        update_peerinfo,
-        cli=source.cli,
+        source.cli.update_peerinfo,
         dataset=source.dataset,
         peerinfo=create_peering_info(dest, Direction.SEND),
         localhost=localhost,
     )
     f2 = thread_exc.submit(
-        update_peerinfo,
-        cli=dest.cli,
+        dest.cli.update_peerinfo,
         dataset=dest.dataset,
         peerinfo=create_peering_info(source, Direction.RECEIVE),
         localhost=localhost,
@@ -274,7 +268,6 @@ def _transfer_batch(
     Tags are set only after entire batch has been sent.
     """
     assert is_set(source.snaps) and is_set(dest.snaps)
-    assert is_set(source.holds) and is_set(dest.holds)
     assert is_set(source.holdtag) and is_set(dest.holdtag)
 
     def _s(level: int = 0):
@@ -285,7 +278,7 @@ def _transfer_batch(
 
     # Create holds for all snaps we are about to send.
     # If the send fails before tags were set, the source snaps won't get destroyed and can be used for repairing tags on next push.
-    add_hold(source.cli, [s for _, s in batch], source.holdtag, holds=source.holds)
+    source.cli.add_hold([s for _, s in batch], source.holdtag)
 
     # Determine whether snapshots in the batch are consecutive
     _snaps = [batch_first] + [s for _, s in batch]
@@ -315,11 +308,11 @@ def _transfer_batch(
     batch_last_dest = next(iter(s for s in dest.snaps if s.guid == batch_last.guid))
 
     # Hold latest snap on dest
-    add_hold(dest.cli, batch_last_dest, dest.holdtag, holds=dest.holds)
+    dest.cli.add_hold(batch_last_dest, dest.holdtag)
 
     # Release old holds in parallel
-    f3 = thread_exc.submit(release_hold, source.cli, [s for s, _ in batch], source.holdtag, holds=source.holds)
-    f4 = thread_exc.submit(release_hold, dest.cli, batch_first_dest, dest.holdtag, holds=dest.holds)
+    f3 = thread_exc.submit(source.cli.release_hold, [s for s, _ in batch], source.holdtag)
+    f4 = thread_exc.submit(dest.cli.release_hold, batch_first_dest, dest.holdtag)
     f3.result()
     f4.result()
 
@@ -421,7 +414,6 @@ def ensure_holds(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
     - There is exactly one holdtag on each side, on the latest common snapshot
     """
     assert is_set(source.snaps) and is_set(dest.snaps)
-    assert is_set(source.holds) and is_set(dest.holds)
     assert is_set(source.holdtag) and is_set(dest.holdtag)
     assert is_set(source.base_snap) and is_set(dest.base_snap)
 
@@ -434,27 +426,23 @@ def ensure_holds(source: DatasetSide, dest: DatasetSide, log_indent: int = 0):
             source.snaps,
             dest.snaps
         )
-        _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), current_holdtags=(source.holds, dest.holds), log_indent=log_indent)
+        _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), log_indent=log_indent)
         return
 
     # Ensure latest common snap is held
-    if source.holdtag not in source.holds[source.base_snap]:
+    if source.holdtag not in source.base_snap.holdtags:
         log.info(_s() + f"Creating hold for latest common snapshot '{source.base_snap.shortname}' on source")
-        source.cli.hold([source.base_snap.longname], tag=source.holdtag)
-        source.base_snap.num_holds += 1
-        source.holds[source.base_snap].add(source.holdtag)
-    if dest.holdtag not in dest.holds[dest.base_snap]:
+        source.cli.add_hold(source.base_snap, tag=source.holdtag)
+    if dest.holdtag not in dest.base_snap.holdtags:
         log.info(_s() + f"Creating hold for latest common snapshot '{dest.base_snap.shortname}' on destination")
-        dest.cli.hold([dest.base_snap.longname], tag=dest.holdtag)
-        dest.base_snap.num_holds += 1
-        dest.holds[dest.base_snap].add(dest.holdtag)
+        dest.cli.add_hold(dest.base_snap, tag=dest.holdtag)
 
     # Remove all other holdtags
     release_snaps = (
         [s for s in source.snaps if s.guid != source.base_snap.guid],
         [s for s in dest.snaps if s.guid != dest.base_snap.guid]
     )
-    _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), current_holdtags=(source.holds, dest.holds), log_indent=log_indent)
+    _release_holds((source.cli, dest.cli), release_snaps, (source.holdtag, dest.holdtag), log_indent=log_indent)
 
 
 def find_latest_common(source: DatasetSide, dest: DatasetSide) -> tuple[Snapshot, Snapshot] | tuple[None, None]:
@@ -486,7 +474,6 @@ def _release_holds(
     clis: tuple[ZfsCli, ZfsCli],
     snaps: tuple[list[Snapshot], list[Snapshot]],
     release_holdtags: tuple[str, str],
-    current_holdtags: tuple[dict[Snapshot, set[str]], dict[Snapshot, set[str]]],
     log_indent: int = 0
 ):
     def _s(level: int = 0):
@@ -494,20 +481,13 @@ def _release_holds(
 
     # Filter for snaps that have the holdtags
     release_snaps = (
-        [s for s in snaps[0] if release_holdtags[0] in current_holdtags[0][s]],
-        [s for s in snaps[1] if release_holdtags[1] in current_holdtags[1][s]],
+        [s for s in snaps[0] if release_holdtags[0] in s.holdtags],
+        [s for s in snaps[1] if release_holdtags[1] in s.holdtags],
     )
     if release_snaps[0]:
         log.info(_s() + f"Releasing {len(release_snaps[0])} obsolete holds on source")
     if release_snaps[1]:
         log.info(_s() + f"Releasing {len(release_snaps[1])} obsolete holds on destination")
 
-    clis[0].release_hold([s.longname for s in release_snaps[0]], release_holdtags[0])
-    for s in release_snaps[0]:
-        s.num_holds -= 1
-        current_holdtags[0][s].remove(release_holdtags[0])
-
-    clis[1].release_hold([s.longname for s in release_snaps[1]], release_holdtags[1])
-    for s in release_snaps[1]:
-        s.num_holds -= 1
-        current_holdtags[1][s].remove(release_holdtags[1])
+    clis[0].release_hold(release_snaps[0], release_holdtags[0])
+    clis[1].release_hold(release_snaps[1], release_holdtags[1])

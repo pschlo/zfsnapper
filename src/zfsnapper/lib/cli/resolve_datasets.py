@@ -1,12 +1,12 @@
 from dataclasses import dataclass
 from collections.abc import Collection
 
-from zfsnapper.lib import ZfsCli, Dataset, LocalCommandRunner, SshCommandRunner, CommandRunner, RawZfs, RawZpool
+from zfsnapper.lib.zfs import ZfsCli, Dataset, LocalCommandRunner, SshCommandRunner, CommandRunner, RawZfs, RawZpool
 from .resolve_paths import resolve_paths, ResolvedPaths
-from .path import Path
+from ..zfs.domain.model.path import Path
 from .parse_dataset_arg import parse_dataset_arg, ConnSpec, DatasetSpec
 from .utils import group_by, combine_dicts
-from .sort import sortkey_conn
+from .sortkey import sortkey_conn
 
 
 @dataclass

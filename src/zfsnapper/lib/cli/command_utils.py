@@ -1,17 +1,14 @@
 import logging
 from collections.abc import Collection
-from dataclasses import asdict
-from dateutil.relativedelta import relativedelta
-from datetime import timedelta, datetime
 
-from zfsnapper.common.filter import SnapFilter, snapfilters
 from zfsnapper.common.args import CommonArgs
-from zfsnapper.common.sort import sortkey_snap_by_time
-from zfsnapper.lib import ZfsCli
-from zfsnapper.common.utils import combine_dicts, group_by, space
-from zfsnapper.common.resolve_datasets import ResolvedDatasets, resolve_dataset_specs
-from zfsnapper.common.parse_dataset_arg import parse_dataset_arg
-from zfsnapper.common.replication.utils import parse_holdtags, Peering
+from zfsnapper.lib.zfs import ZfsCli
+
+from zfsnapper.lib.cli.snapfilter import SnapFilter, snapfilters
+from zfsnapper.lib.cli.sortkey import sortkey_snap_by_time
+from zfsnapper.lib.cli.utils import combine_dicts
+from zfsnapper.lib.cli.resolve_datasets import ResolvedDatasets, resolve_dataset_specs
+from zfsnapper.lib.cli.parse_dataset_arg import parse_dataset_arg
 
 
 log = logging.getLogger(__name__)

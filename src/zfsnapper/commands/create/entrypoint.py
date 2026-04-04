@@ -3,11 +3,11 @@ import random
 import string
 import logging
 
-from zfsnapper.lib import PropertyName
-from zfsnapper.common.command_utils import resolve_dataset_args
+from zfsnapper.lib.zfs import PropertyName
+from zfsnapper.lib.cli.command_utils import resolve_dataset_args
 from .args import Args
-from zfsnapper.common.utils import space
-from zfsnapper.common.sort import sortkey_dataset
+from zfsnapper.lib.cli.utils import space
+from zfsnapper.lib.cli.sortkey import sortkey_dataset
 
 
 log = logging.getLogger(__name__)

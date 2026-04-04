@@ -3,7 +3,7 @@ from collections.abc import Collection
 import logging
 from abc import abstractmethod, ABC
 
-from zfsnapper.lib import Snapshot, Path
+from zfsnapper.lib.zfs import Snapshot, Path
 
 
 log = logging.getLogger(__name__)

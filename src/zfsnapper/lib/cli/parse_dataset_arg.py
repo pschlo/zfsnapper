@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import string
 import platform
 
-from .path import Path
+from zfsnapper.lib.zfs import Path
 
 
 LOCAL_NODE_TOKEN = "local"

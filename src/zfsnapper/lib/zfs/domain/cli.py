@@ -4,14 +4,13 @@ from itertools import batched
 import logging
 from typing import IO, cast, overload
 
-from ..raw import RawZfs, RawZpool, ZfsDatasetType, RawHold
+from zfsnapper.lib.zfs.raw import RawZfs, RawZpool, ZfsDatasetType, RawHold
 from .model import Snapshot, Dataset, Hold, Pool, REQUIRED_DATASET_PROPS, REQUIRED_SNAP_PROPS, REQUIRED_POOL_PROPS, PropertyName, PeeringInfo, Peering
-from .utils import _normalize_name, _normalize_names, _as_snap_container, _filter_snaps, _is_container_type
+from .utils import _normalize_name, _normalize_names, _as_snap_container, _filter_snaps, _is_container_type, _is_container
 from . import typedefs as T
 
-from zfsnapper.common.utils import group_by, space
-from zfsnapper.common.path import Path
-from zfsnapper.common.replication.utils import parse_holdtags
+from zfsnapper.lib.cli.utils import group_by, space
+from zfsnapper.lib.zfs import Path
 
 log = logging.getLogger(__name__)
 
@@ -110,14 +109,32 @@ class ZfsCli:
             return {s: tags[s.longname] for s in snaps}
 
 
-    def add_hold(self, snaps: T.Snap | T.Snaps, tag: str) -> list[Snapshot]:
+    @overload
+    def add_hold(self, snaps: str, tag: str | Peering) -> None: ...
+    @overload
+    def add_hold(self, snaps: Snapshot, tag: str | Peering) -> Snapshot: ...
+    @overload
+    def add_hold(self, snaps: Collection[str], tag: str | Peering) -> None: ...
+    @overload
+    def add_hold(self, snaps: Collection[Snapshot], tag: str | Peering) -> list[Snapshot]: ...
+    def add_hold(self, snaps: T.Snap | T.Snaps, tag: str | Peering) -> Snapshot | list[Snapshot] | None:
+        if isinstance(tag, Peering):
+            tag = tag.to_tag()
+
         self._zfs.hold(
             snapshots_fullnames=_normalize_names(snaps),
             tag=tag
         )
 
+        # If snaps were given as strings, return None
+        snaps_container = _as_snap_container(snaps)
+        if _is_container_type(snaps_container, str):
+            return None
+
+        # Determine new snap objects
+        assert _is_container_type(snaps_container, Snapshot)
         new_snaps = []
-        for s in _filter_snaps(snaps):
+        for s in snaps_container:
             if tag in s.holdtags:
                 # Nothing changed
                 continue
@@ -127,9 +144,22 @@ class ZfsCli:
                 .with_holdtags(s.holdtags | {tag})
             )
             new_snaps.append(new_snap)
+
+        if isinstance(snaps, Snapshot):
+            assert len(new_snaps) == 1
+            return next(iter(new_snaps))
         return new_snaps
 
-    def release_hold(self, snaps: T.Snap | T.Snaps, tag: str | Peering) -> list[Snapshot]:
+
+    @overload
+    def release_hold(self, snaps: str, tag: str | Peering) -> None: ...
+    @overload
+    def release_hold(self, snaps: Snapshot, tag: str | Peering) -> Snapshot: ...
+    @overload
+    def release_hold(self, snaps: Collection[str], tag: str | Peering) -> None: ...
+    @overload
+    def release_hold(self, snaps: Collection[Snapshot], tag: str | Peering) -> list[Snapshot]: ...
+    def release_hold(self, snaps: T.Snap | T.Snaps, tag: str | Peering) -> Snapshot | list[Snapshot] | None:
         if isinstance(tag, Peering):
             tag = tag.to_tag()
 
@@ -138,15 +168,38 @@ class ZfsCli:
             tag=tag
         )
 
+        # If snaps were given as strings, return None
+        snaps_container = _as_snap_container(snaps)
+        if _is_container_type(snaps_container, str):
+            return None
+
+        # Determine new snap objects
+        assert _is_container_type(snaps_container, Snapshot)
         new_snaps = []
-        for s in _filter_snaps(snaps):
+        for s in snaps_container:
             new_snap = (
                 s
                 .with_num_holds(s.num_holds - 1)
                 .with_holdtags(s.holdtags - {tag})
             )
             new_snaps.append(new_snap)
+
+        if isinstance(snaps, Snapshot):
+            assert len(new_snaps) == 1
+            return next(iter(new_snaps))
         return new_snaps
+
+    def get_pool(
+        self,
+        poolname: T.Pool,
+        properties: Collection[str] = []
+    ) -> Pool:
+        pools = self.get_pools(
+            poolnames=poolname,
+            properties=properties
+        )
+        assert len(pools) == 1
+        return next(iter(pools))
 
     def get_pools(
         self,
@@ -163,6 +216,19 @@ class ZfsCli:
         pool_to_props = group_by(fetched_props, key=lambda p: p.objname)
         pools = [Pool.from_props(props) for props in pool_to_props.values()]
         return pools
+
+    def get_dataset(
+        self,
+        path: T.Dataset,
+        properties: Collection[str] = [],
+    ) -> Dataset:
+        datasets = self.get_datasets(
+            paths=path,
+            properties=properties,
+            recursive=False
+        )
+        assert len(datasets) == 1
+        return next(iter(datasets))
 
     def get_datasets(
         self,
@@ -252,6 +318,11 @@ class ZfsCli:
     def destroy_snapshots(self, snaps: T.Snap | T.Snaps) -> None:
         self._zfs.destroy(
             snap_longnames=_normalize_names(snaps)
+        )
+
+    def rollback(self, snap: T.Snap) -> None:
+        self._zfs.rollback(
+            snap_fullname=_normalize_name(snap)
         )
 
 

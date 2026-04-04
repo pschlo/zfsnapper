@@ -3,7 +3,7 @@ from collections.abc import Collection
 from collections import deque
 from dataclasses import dataclass, field
 
-from .path import Path, EMPTY_PATH
+from ..zfs.domain.model.path import Path, EMPTY_PATH
 
 
 @dataclass(frozen=False, eq=False)
