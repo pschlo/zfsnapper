@@ -52,7 +52,7 @@ def send_receive(
         send_proc = src_cli.send_snapshot_async(
             snapshot.longname,
             raw=raw,
-            base_fullname=base.longname if base else None,
+            base=base.longname if base else None,
             include_intermediates=include_intermediates,
             props=send_props,
             # no_preserve_encryption=no_preserve_encryption

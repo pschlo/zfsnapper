@@ -113,4 +113,15 @@ class Snapshot:
             properties=self.properties,
             holdtags=set(holdtags)
         )
-
+    
+    def with_tags(self, tags: Collection[str]) -> Snapshot:
+        return Snapshot(
+            dataset=self.dataset,
+            shortname=self.shortname,
+            guid=self.guid,
+            timestamp=self.timestamp,
+            tags=frozenset(tags),
+            num_holds=self.num_holds,
+            properties=self.properties,
+            holdtags=self.holdtags
+        )

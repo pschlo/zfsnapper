@@ -7,7 +7,14 @@ from . import typedefs as T
 from zfsnapper.lib.zfs import Path
 
 
-def _normalize_name(name: T.AnySingle) -> str:
+@overload
+def _normalize_name(name: T.AnySingle) -> str: ...
+@overload
+def _normalize_name(name: T.AnySingle | None) -> str | None: ...
+def _normalize_name(name: T.AnySingle | None) -> str | None:
+    if name is None:
+        return None
+
     match name:
         case str():
             return name
@@ -22,6 +29,7 @@ def _normalize_name(name: T.AnySingle) -> str:
         case _:
             assert False
 
+
 @overload
 def _normalize_names(v: T.AnySingle | T.AnyCollection) -> list[str]: ...
 @overload
@@ -30,6 +38,7 @@ def _normalize_names(v: T.AnySingle | T.AnyCollection | None) -> list[str] | Non
     if v is None:
         return None
     return [_normalize_name(n) for n in _as_container(v)]
+
 
 def _as_container(v: T.AnySingle | T.AnyCollection) -> T.AnyCollection:
     if isinstance(v, T.AnySingle):
@@ -51,10 +60,3 @@ def _is_container_type[V](v: T.AnyCollection, typ: type[V]) -> TypeGuard[Collect
         raise ValueError(f"Not a container")
     except StopIteration:
         raise ValueError(f"Cannot determine type of empty container")
-
-def _filter_snaps(snaps: T.Snap | T.Snaps) -> Collection[Snapshot]:
-    snaps = _as_snap_container(snaps)
-    if _is_container_type(snaps, Snapshot):
-        return snaps
-    else:
-        return []
