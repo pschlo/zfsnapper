@@ -3,7 +3,7 @@ from typing import Optional, cast, Literal, Callable
 from collections.abc import Collection
 import logging
 
-from zfsnapper.common.zfs import Snapshot, ZfsCli
+from zfsnapper.lib import Snapshot, ZfsCli
 from zfsnapper.common.resolve_datasets import ResolvedDatasets
 from zfsnapper.common.filter import SnapFilter
 from zfsnapper.common.utils import space, group_by

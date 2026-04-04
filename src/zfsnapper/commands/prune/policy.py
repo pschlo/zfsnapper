@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 import re
 import logging
 
-from zfsnapper.common.zfs import Snapshot
+from zfsnapper.lib import Snapshot
 from zfsnapper.common.sort import sortkey_snap_by_time
 from zfsnapper.common.utils import group_by
 from zfsnapper.common.resolve_datasets import ResolvedDatasets

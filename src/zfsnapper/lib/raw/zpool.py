@@ -1,9 +1,6 @@
-from subprocess import Popen, PIPE
-from collections.abc import Collection, Sequence
-from itertools import batched
-from typing import IO
+from collections.abc import Collection
 
-from ..transport.command_runner import CommandRunner
+from ..transport import CommandRunner
 from .model import Property
 from .common import _is_empty, _normalize_str
 

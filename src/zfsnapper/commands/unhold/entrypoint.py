@@ -1,7 +1,7 @@
 from __future__ import annotations
 import logging
 
-from zfsnapper.common.zfs import ZfsCli, Hold, Snapshot
+from zfsnapper.lib import ZfsCli, Hold, Snapshot
 from .args import Args
 from zfsnapper.common.filter import SnapFilter
 from zfsnapper.common.path import Path

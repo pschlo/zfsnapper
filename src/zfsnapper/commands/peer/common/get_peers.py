@@ -1,9 +1,9 @@
 from __future__ import annotations
 from collections.abc import Collection
 
-from zfsnapper.common.zfs import Dataset, Snapshot
+from zfsnapper.lib import Dataset, Snapshot, Path
 from zfsnapper.common.resolve_datasets import ResolvedDatasets
-from zfsnapper.common.command_utils import parse_holdtags, Path, group_by, Peering
+from zfsnapper.common.command_utils import parse_holdtags, group_by, Peering
 
 
 def get_peers(snaps: Collection[Snapshot], holds: dict[Snapshot, set[str]], datasets: ResolvedDatasets):

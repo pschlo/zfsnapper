@@ -5,8 +5,8 @@ from collections.abc import Collection, Mapping
 import logging
 
 from .args import Args
-from zfsnapper.common.zfs import Snapshot, ZfsCli, PeeringInfo, Dataset, Peering
-from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args, get_peerinfo, get_holds
+from zfsnapper.lib import Snapshot, ZfsCli, PeeringInfo, Dataset, Peering
+from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args, resolve_filter_args
 from zfsnapper.common.filter import SnapFilter
 from zfsnapper.common.resolve_datasets import ResolvedDatasets
 from zfsnapper.common.replication.utils import parse_holdtags, Direction
@@ -36,12 +36,9 @@ def entrypoint(args: Args) -> None:
 def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, extend_holds: bool, held_only: bool):
     snaps = fetch_snaps(cli, datasets, filter=filter)
 
-    # get hold tags for all snapshots with holds
-    holdtags = get_holds(cli, snaps)
-
     # Optionally filter snaps
     if held_only:
-        snaps = [s for s in snaps if holdtags[s]]
+        snaps = [s for s in snaps if s.num_holds > 0]
 
     if not snaps:
         log.info(f"No matching snapshots")
@@ -54,18 +51,18 @@ def list_conn(cli: ZfsCli, datasets: ResolvedDatasets, filter: SnapFilter, exten
         Field('TIMESTAMP',  lambda s: str(s.timestamp)),
     ]
     if extend_holds:
-        fields += [Field('HOLDS', lambda s: "\n".join(sorted(holdtags[s])))]
+        fields += [Field('HOLDS', lambda s: "\n".join(sorted(s.holdtags)))]
     else:
-        fields += [Field('HOLDS', lambda s: '+' if holdtags[s] else '')]
-    fields += [Field('PEERS', lambda s: "\n".join(sorted(format_snap_peers(s, datasets, holdtags))))]
+        fields += [Field('HOLDS', lambda s: '+' if s.num_holds > 0 else '')]
+    fields += [Field('PEERS', lambda s: "\n".join(sorted(format_peerholds(s, datasets))))]
 
     render_table(fields, [(s,) for s in snaps])
 
 
-def format_snap_peers(snapshot: Snapshot, datasets: ResolvedDatasets, holdtags: Mapping[Snapshot, Collection[str]]) -> list[str]:
+def format_peerholds(snapshot: Snapshot, datasets: ResolvedDatasets) -> list[str]:
     dataset = datasets.path_to_dataset[snapshot.dataset]
-    return [format_peering(dataset, p) for p in parse_holdtags(holdtags[snapshot])]
+    return [format_peering(dataset, p) for p in snapshot.peerholds]
 
 def format_peering(dataset: Dataset, peering: Peering):
-    p = get_peerinfo(dataset, peering)
+    p = dataset.get_peerinfo(peering)
     return f"{peering.direction.icon}  {p.host if p else '?'}"

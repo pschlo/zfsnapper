@@ -3,7 +3,7 @@ import random
 import string
 import logging
 
-from zfsnapper.common.zfs import ZfsProperty
+from zfsnapper.lib import PropertyName
 from zfsnapper.common.command_utils import resolve_dataset_args
 from .args import Args
 from zfsnapper.common.utils import space
@@ -35,7 +35,7 @@ def entrypoint(args: Args) -> None:
             datasets=datasets.p.matched,
             shortname=shortname,
             properties={
-                ZfsProperty.ZFSNAPPER_TAGS: ','.join(args.tag)
+                PropertyName.ZFSNAPPER_TAGS: ','.join(args.tag)
             }
         )
 

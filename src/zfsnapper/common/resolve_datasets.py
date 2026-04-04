@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from collections.abc import Collection
 
-from .zfs import ZfsCli, Dataset, RemoteZfsCli, LocalZfsCli
+from zfsnapper.lib import ZfsCli, Dataset, LocalCommandRunner, SshCommandRunner, CommandRunner, RawZfs, RawZpool
 from .resolve_paths import resolve_paths, ResolvedPaths
 from .path import Path
 from .parse_dataset_arg import parse_dataset_arg, ConnSpec, DatasetSpec
@@ -29,13 +29,18 @@ class ResolvedDatasets:
 
 def create_zfs_cli(conn: ConnSpec) -> ZfsCli:
     if conn.host:
-        return RemoteZfsCli(
+        runner = SshCommandRunner(
             host=conn.host,
             user=conn.user,
             port=conn.port
         )
     else:
-        return LocalZfsCli()
+        runner = LocalCommandRunner()
+
+    return ZfsCli(
+        raw_zfs=RawZfs(runner),
+        raw_zpool=RawZpool(runner)
+    )
 
 
 def resolve_dataset_specs(

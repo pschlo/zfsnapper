@@ -1,9 +1,8 @@
 from subprocess import Popen, PIPE
-from collections.abc import Collection, Sequence
-from itertools import batched
-from typing import IO, overload
+from collections.abc import Collection
+from typing import IO
 
-from ..transport.command_runner import CommandRunner
+from ..transport import CommandRunner
 from .model import Property, RawHold
 from zfsnapper.common.utils import group_by
 

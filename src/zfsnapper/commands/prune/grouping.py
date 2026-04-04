@@ -2,7 +2,7 @@ from typing import Optional, Any, overload, Literal
 from collections.abc import Callable, Collection
 from dataclasses import dataclass
 
-from zfsnapper.common.zfs import Snapshot
+from zfsnapper.lib import Snapshot
 from zfsnapper.common.path import Path
 from zfsnapper.common.sort import sortkey_dataset
 from zfsnapper.common.utils import group_by, sort_dict

@@ -9,12 +9,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 from zfsnapper.common.replication import ReplicationError
 from zfsnapper.common.replication.send_receive import send_receive
-from zfsnapper.common.command_utils import update_peerinfo, get_holds, add_hold, release_hold
 from zfsnapper.common.parse_dataset_arg import ConnSpec
 from zfsnapper.common.filter import SnapFilter, snapfilters
 from zfsnapper.common.path import Path
 from zfsnapper.common.sort import sortkey_snap_by_time
-from zfsnapper.common.zfs import ZfsCli, Dataset, PeeringInfo, Snapshot, ZfsDatasetType, ZfsProperty, Pool, EXCLUDABLE_RECEIVE_PROPS
+from zfsnapper.lib import ZfsCli, Dataset, PeeringInfo, Snapshot, ZfsDatasetType, PropertyName, Pool
 from zfsnapper.common.utils import space, is_subsequence, group_by, invert_dict
 from zfsnapper.common.replication.utils import Direction, Peering
 from zfsnapper.common.utils import NOT_SET, NotSet, is_set
@@ -172,13 +171,13 @@ def transfer_initial(source: DatasetSide, dest: DatasetSide, snap: Snapshot, enc
     assert is_set(source.dataset) and is_set(source.snaps)
     assert source.dataset.type in (ZfsDatasetType.FILESYSTEM, ZfsDatasetType.VOLUME)
     properties: dict[str, str] = {
-        ZfsProperty.READONLY: 'on'
+        PropertyName.READONLY: 'on'
     }
     if source.dataset.type == ZfsDatasetType.FILESYSTEM:
         properties |= {
-            ZfsProperty.ATIME: 'off',
-            ZfsProperty.CANMOUNT: 'off',
-            ZfsProperty.MOUNTPOINT: 'none'
+            PropertyName.ATIME: 'off',
+            PropertyName.CANMOUNT: 'off',
+            PropertyName.MOUNTPOINT: 'none'
         }
 
     log.info(_s() + f"Creating destination dataset by transferring oldest snapshot")

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from subprocess import CalledProcessError
 import logging
 
-from zfsnapper.common.zfs import Snapshot, ZfsCli
+from zfsnapper.lib import Snapshot, ZfsCli
 from zfsnapper.common.utils import space
 from zfsnapper.common.parse_dataset_arg import ConnSpec
 from zfsnapper.common.resolve_datasets import ResolvedDatasets

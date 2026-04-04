@@ -5,12 +5,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 from zfsnapper.common.replication import ReplicationError
 from zfsnapper.common.resolve_datasets import ResolvedDatasets, create_zfs_cli, resolve_conn_datasets
-from zfsnapper.common.command_utils import resolve_dataset_args, fetch_snaps, get_holds, resolve_filter_args
+from zfsnapper.common.command_utils import resolve_dataset_args, fetch_snaps, resolve_filter_args
 from zfsnapper.common.parse_dataset_arg import parse_dataset_arg, ConnSpec
 from zfsnapper.common.sort import sortkey_dataset
 from zfsnapper.common.filter import SnapFilter, snapfilters
 from zfsnapper.common.path import Path
-from zfsnapper.common.zfs import ZfsCli, Pool, Snapshot
+from zfsnapper.lib import ZfsCli, Pool, Snapshot
 from zfsnapper.common.utils import group_by, space
 from .replicate import replicate, DatasetSide, NOT_SET, EncryptionMode
 

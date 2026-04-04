@@ -1,7 +1,7 @@
 from collections.abc import Collection
 from typing import cast
 
-from zfsnapper.common.zfs import Snapshot, Dataset
+from zfsnapper.lib import Snapshot, Dataset
 from zfsnapper.common.parse_dataset_arg import ConnSpec
 from zfsnapper.common.path import Path
 from zfsnapper.common.replication.utils import Peering

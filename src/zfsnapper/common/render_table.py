@@ -4,7 +4,7 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 import logging
 
-from zfsnapper.common.zfs import Snapshot
+from zfsnapper.lib import Snapshot
 
 
 log = logging.getLogger(__name__)

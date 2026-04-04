@@ -3,9 +3,9 @@ from typing import cast, Optional, TYPE_CHECKING
 import logging
 from collections.abc import Collection
 
-from zfsnapper.common.zfs import ZfsCli, Dataset
+from zfsnapper.lib import ZfsCli, Dataset
 from zfsnapper.common.resolve_datasets import ResolvedDatasets
-from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args, get_holds, get_peerinfo
+from zfsnapper.common.command_utils import fetch_snaps, resolve_dataset_args
 from zfsnapper.common.parse_dataset_arg import ConnSpec
 from zfsnapper.common.sort import sortkey_dataset, sortkey_peering
 from zfsnapper.common.utils import sort_dict, space

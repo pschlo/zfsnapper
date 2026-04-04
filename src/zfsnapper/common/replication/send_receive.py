@@ -5,8 +5,7 @@ import logging
 import threading
 import time
 
-from zfsnapper.common.zfs import ZfsCli, Snapshot, ZfsProperty, Dataset, ZfsDatasetType
-from zfsnapper.common.path import Path
+from zfsnapper.lib import ZfsCli, Snapshot, Path
 from zfsnapper.common.utils import space
 
 from .exception import ReplicationError

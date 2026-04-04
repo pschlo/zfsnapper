@@ -231,7 +231,7 @@ class Dataset:
                 f, v = field.split('=', maxsplit=1)
                 fields[f] = v
             peer_slots_dict[slot] = PeeringInfo.from_fields(fields)
-        
+
         # Convert peer slots to list.
         # Raises KeyError if slots are not contiguous.
         if not peer_slots_dict:
@@ -297,6 +297,8 @@ class PeerField(StrEnum):
     LAST_USED = 'last_used'
 
 
+PEER_SLOT_PROPERTIES = [f'zfsnapper:peer:{i}' for i in range(50)]
+
 # properties that will always be fetched
 REQUIRED_SNAP_PROPS = [
     PropertyName.NAME,
@@ -311,15 +313,13 @@ REQUIRED_DATASET_PROPS = [
     PropertyName.GUID,
     PropertyName.TYPE,
     PropertyName.ENCRYPTION
-]
+] + PEER_SLOT_PROPERTIES
 
 REQUIRED_POOL_PROPS = [
     PropertyName.NAME,
     PropertyName.GUID
 ]
 
-
-PEER_SLOT_PROPERTIES = [f'zfsnapper:peer:{i}' for i in range(50)]
 
 ALL_ZFS_PROPERTIES: list[str] = list(PropertyName) + PEER_SLOT_PROPERTIES
 

@@ -7,8 +7,7 @@ from datetime import timedelta, datetime
 from zfsnapper.common.filter import SnapFilter, snapfilters
 from zfsnapper.common.args import CommonArgs
 from zfsnapper.common.sort import sortkey_snap_by_time
-from zfsnapper.common.zfs import ZfsCli, PeeringInfo, PeerField, Dataset, Snapshot
-from zfsnapper.common.path import Path
+from zfsnapper.lib import ZfsCli
 from zfsnapper.common.utils import combine_dicts, group_by, space
 from zfsnapper.common.resolve_datasets import ResolvedDatasets, resolve_dataset_specs
 from zfsnapper.common.parse_dataset_arg import parse_dataset_arg
