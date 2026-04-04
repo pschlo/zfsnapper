@@ -1,4 +1,5 @@
-from typing import Any, overload
+from typing import Any, overload, TypeAlias, Literal, TypeGuard
+from enum import Enum
 from collections.abc import Hashable, Iterable, Sequence, Collection, Callable, Mapping
 
 
@@ -88,3 +89,12 @@ def space(num: int):
 def is_subsequence[T](sub: Sequence[T], master: Sequence[T]) -> bool:
     n = len(sub)
     return any(master[i:i+n] == sub for i in range(len(master) - n + 1))
+
+
+_Sentinel = Enum("_Sentinel", {"NOT_SET": object()})
+NOT_SET = _Sentinel.NOT_SET
+NotSet: TypeAlias = Literal[_Sentinel.NOT_SET]
+
+
+def is_set[T](value: T | NotSet) -> TypeGuard[T]:
+    return value is not NOT_SET

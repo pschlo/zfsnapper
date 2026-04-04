@@ -17,18 +17,10 @@ from zfsnapper.common.sort import sortkey_snap_by_time
 from zfsnapper.common.zfs import ZfsCli, Dataset, PeeringInfo, Snapshot, ZfsDatasetType, ZfsProperty, Pool, EXCLUDABLE_RECEIVE_PROPS
 from zfsnapper.common.utils import space, is_subsequence, group_by, invert_dict
 from zfsnapper.common.replication.utils import Direction, Peering
+from zfsnapper.common.utils import NOT_SET, NotSet, is_set
 
 
 log = logging.getLogger(__name__)
-
-
-_Sentinel = Enum("_Sentinel", {"NOT_SET": object()})
-NOT_SET = _Sentinel.NOT_SET
-NotSet: TypeAlias = Literal[_Sentinel.NOT_SET]
-
-
-def is_set[T](value: T | NotSet) -> TypeGuard[T]:
-    return value is not NOT_SET
 
 
 class EncryptionMode(StrEnum):

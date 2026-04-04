@@ -1,0 +1,368 @@
+from collections.abc import Collection
+from subprocess import Popen
+import logging
+from typing import IO, cast, overload, TypeGuard, Any, Union
+
+from .raw_zfs import RawZfs
+from .raw_zpool import RawZpool
+from .cli_model import ZfsDatasetType
+from .domain_model import Snapshot, Dataset, Hold, Pool, REQUIRED_DATASET_PROPS, REQUIRED_SNAP_PROPS, REQUIRED_POOL_PROPS, PropertyName, PeeringInfo, Peering
+
+from zfsnapper.common.utils import group_by, space
+from zfsnapper.common.path import Path
+from zfsnapper.common.replication.utils import parse_holdtags
+
+log = logging.getLogger(__name__)
+
+
+T_Snap = str | Snapshot
+T_Snaps = Collection[str] | Collection[Snapshot]
+
+T_Dataset = str | Path | Dataset
+T_Datasets = Collection[str] | Collection[Path] | Collection[Dataset]
+
+T_Pool = str | Pool
+T_Pools = Collection[str] | Collection[Pool]
+
+T_AnySingle = T_Snap | T_Dataset | T_Pool
+T_AnyCollection = T_Snaps | T_Datasets | T_Pools
+
+
+class ZfsCli:
+    def __init__(self, raw_zfs: RawZfs, raw_zpool: RawZpool):
+        self._zfs = raw_zfs
+        self._zpool = raw_zpool
+
+    def send_snapshot_async(
+        self,
+        snapshot_fullname: str,
+        raw: bool,
+        base_fullname: str | None = None,
+        include_intermediates: bool = False,
+        props: bool = False,
+        no_preserve_encryption: bool = False
+    ) -> Popen[bytes]:
+        return self._zfs.send_async(
+            snapshot_fullname=snapshot_fullname,
+            raw=raw,
+            base_fullname=base_fullname,
+            include_intermediates=include_intermediates,
+            props=props,
+            no_preserve_encryption=no_preserve_encryption
+        )
+
+    def receive_snapshot_async(
+        self,
+        dataset: T_Dataset,
+        stdin: IO[bytes],
+        override_props: dict[str, str] = {},
+        exclude_props: Collection[str] = []
+    ) -> Popen[bytes]:
+        return self._zfs.receive_async(
+            dataset=_normalize_name(dataset),
+            stdin=stdin,
+            override_props=override_props,
+            exclude_props=exclude_props
+        )
+
+    def get_holds(self, snaps: T_Snap | T_Snaps) -> set[Hold]:
+        # Filter snapshots down to those that actually have holds
+        snaps = _as_snap_container(snaps)
+        if _is_container_type(snaps, Snapshot):
+            snaps = [s for s in snaps if s.num_holds > 0]
+        _holds = self._zfs.holds(
+            _normalize_names(snaps)
+        )
+        holds: set[Hold] = set()
+        for h in _holds:
+            dataset, shortname = h.snap_longname.split('@')
+            holds.add(Hold(
+                dataset=Path(dataset),
+                snap_shortname=shortname,
+                tag=h.tag
+            ))
+        return holds
+
+    @overload
+    def get_holdtags(self, snaps: Collection[str]) -> dict[str, set[str]]: ...
+    @overload
+    def get_holdtags(self, snaps: Collection[Snapshot]) -> dict[Snapshot, set[str]]: ...
+    @overload
+    def get_holdtags(self, snaps: T_Snap) -> set[str]: ...
+    def get_holdtags(self, snaps: T_Snap | T_Snaps):
+        holds = self.get_holds(snaps)
+        if isinstance(snaps, T_Snap):
+            tags = {h.tag for h in holds}
+            return tags
+        elif _is_container_type(snaps, str):
+            snaps = cast(Collection[str], snaps)
+            snapname_to_holds = group_by(holds, lambda h: h.snap_longname, ensure_keys=snaps)
+            tags = {s: {h.tag for h in holds} for s, holds in snapname_to_holds.items()}
+            return {s: tags[s] for s in snaps}
+        else:
+            assert _is_container_type(snaps, Snapshot)
+            snapname_to_holds = group_by(holds, lambda h: h.snap_longname, ensure_keys=[s.longname for s in snaps])
+            tags = {s: {h.tag for h in holds} for s, holds in snapname_to_holds.items()}
+            return {s: tags[s.longname] for s in snaps}
+
+    def add_hold(self, snaps: T_Snap | T_Snaps, tag: str) -> list[Snapshot]:
+        self._zfs.hold(
+            snapshots_fullnames=_normalize_names(snaps),
+            tag=tag
+        )
+        return [
+            s.with_num_holds(s.num_holds + 1)
+            for s in _filter_snaps(snaps)
+        ]
+
+    def release_hold(self, snaps: T_Snap | T_Snaps, tag: str) -> list[Snapshot]:
+        self._zfs.release(
+            snapshots_fullnames=_normalize_names(snaps),
+            tag=tag
+        )
+        return [
+            s.with_num_holds(s.num_holds - 1)
+            for s in _filter_snaps(snaps)
+        ]
+
+    def get_pools(
+        self,
+        poolnames: T_Pool | T_Pools | None = None,
+        properties: Collection[str] = []
+    ) -> set[Pool]:
+        # Inject required properties
+        properties = [*REQUIRED_POOL_PROPS, *properties]
+
+        fetched_props = self._zpool.get(
+            properties=properties,
+            targets=_normalize_names(poolnames)
+        )
+        pool_to_props = group_by(fetched_props, key=lambda p: p.objname)
+        pools = {Pool.from_props(props) for props in pool_to_props.values()}
+        return pools
+
+    def get_datasets(
+        self,
+        paths: T_Dataset | T_Datasets | None = None,
+        properties: Collection[str] = [],
+        recursive: bool = False
+    ) -> set[Dataset]:
+        # Inject required properties
+        properties = [*REQUIRED_DATASET_PROPS, *properties]
+
+        fetched_props = self._zfs.get(
+            properties=properties,
+            targets=_normalize_names(paths),
+            types=[ZfsDatasetType.FILESYSTEM, ZfsDatasetType.VOLUME],
+            recursive=recursive
+        )
+        ds_to_props = group_by(fetched_props, key=lambda p: p.objname)
+        datasets = {Dataset.from_props(props) for props in ds_to_props.values()}
+        return datasets
+
+    def create_snapshot(
+        self,
+        datasets: T_Dataset | T_Datasets,
+        shortname: str,
+        recursive: bool = False,
+        properties: dict[str, str] = {}
+    ) -> None:
+        self._zfs.snapshot(
+            datasets=_normalize_names(datasets),
+            shortname=shortname,
+            recursive=recursive,
+            properties=properties
+        )
+
+    def rename_snapshot(self, snap: T_Snap, new_shortname: str) -> None:
+        return self._zfs.rename(
+            fullname=_normalize_name(snap),
+            new_shortname=new_shortname
+        )
+
+    def get_snapshots(
+        self,
+        datasets: T_Dataset | T_Datasets | None = None,
+        properties: Collection[str] = [],
+        recursive: bool = False,
+    ) -> set[Snapshot]:
+        # Inject required properties
+        properties = [*REQUIRED_SNAP_PROPS, *properties]
+
+        fetched_props = self._zfs.get(
+            properties=properties,
+            targets=_normalize_names(datasets),
+            types=[ZfsDatasetType.SNAPSHOT],
+            recursive=recursive,
+        )
+        snap_to_props = group_by(fetched_props, key=lambda p: p.objname)
+        snaps = {Snapshot.from_props(props) for props in snap_to_props.values()}
+        return snaps
+
+    def set_properties(self, objects: T_Snap | T_Snaps | T_Dataset | T_Datasets, props_values: dict[str, str]) -> None:
+        self._zfs.set(
+            objects=_normalize_names(objects),
+            props_values=props_values
+        )
+
+    def set_property(self, objects: T_Snap | T_Snaps | T_Dataset | T_Datasets, property: str, value: str) -> None:
+        self.set_properties(
+            objects=objects,
+            props_values={property: value}
+        )
+
+    def unset_property(self, objects: T_Snap | T_Snaps | T_Dataset | T_Datasets, property: str) -> None:
+        self._zfs.inherit(
+            objects=_normalize_names(objects),
+            property=property
+        )
+
+    def set_snapshot_tags(self, snaps: T_Snap | T_Snaps, tags: Collection[str]) -> None:
+        props = {str(PropertyName.ZFSNAPPER_TAGS): ','.join(tags)}
+        self.set_properties(snaps, props)
+
+    def destroy_snapshots(self, snaps: T_Snap | T_Snaps) -> None:
+        self._zfs.destroy(
+            snap_longnames=_normalize_names(snaps)
+        )
+
+
+    ###### Peer methods #######
+
+    def _set_peerinfo_slot(
+        self,
+        dataset: Dataset,
+        peer: PeeringInfo,
+        slot: int,
+        localhost: str | None = None
+    ) -> Dataset:
+        """Serializes the peer and stores it at the given slot on the dataset."""
+        self.set_property(dataset, f"zfsnapper:peer:{slot}", peer.serialize(localhost=localhost))
+        return dataset.with_peerinfo_slot(slot, peer)
+
+
+    def _clear_peerinfo_slot(
+        self,
+        dataset: Dataset,
+        slot: int
+    ) -> Dataset:
+        self.unset_property(dataset, f'zfsnapper:peer:{slot}')
+        return dataset.with_peerinfo_slot(slot, None)
+
+
+    def update_peerinfo(
+        self,
+        dataset: Dataset,
+        peerinfo: PeeringInfo,
+        localhost: str | None = None
+    ) -> Dataset:
+        """Update peer if it already exists, else add under first free slot."""
+        # Find peer GUID
+        curr_slot = next(
+            (slot for slot, p in enumerate(dataset.peerinfos) if p is not None and p.peering == peerinfo.peering),
+            None
+        )
+        if curr_slot is not None:
+            # Peer already exists in slot; overwrite
+            return self._set_peerinfo_slot(dataset=dataset, peer=peerinfo, slot=curr_slot, localhost=localhost)
+
+        # Find first free slot
+        slot = next((slot for slot, p in enumerate(dataset.peerinfos) if p is None), None)
+        if slot is None:
+            raise RuntimeError(f"Cannot set peer on dataset {dataset.path}: no free slots")
+        return self._set_peerinfo_slot(dataset=dataset, peer=peerinfo, slot=slot, localhost=localhost)
+
+
+    def remove_peer(
+        self,
+        dataset: Dataset,
+        peering: Peering,
+        holds: dict[Snapshot, set[str]],
+        log_indent: int = 0
+    ) -> Dataset:
+        """Removes peer from dataset.
+        
+        Removes both PeerInfo and holds of peer."""
+        def _s(i: int = 0):
+            return space(log_indent+i)
+
+        # Try to find in PeerInfos
+        r = next(
+            ((slot, p) for slot, p in enumerate(dataset.peerinfos) if p and p.peering == peering),
+            None
+        )
+        if r is not None:
+            # Clear slot
+            slot, peer = r
+            dataset = self._clear_peerinfo_slot(dataset=dataset, slot=slot)
+
+        # Determine peer holds on that dataset
+        remove_holds: dict[Peering, set[Snapshot]] = {}
+        for snap, _holds in holds.items():
+            if snap.dataset != dataset.path:
+                continue
+            for _peering in parse_holdtags(_holds):
+                if _peering == peering:
+                    remove_holds.setdefault(_peering, set()).add(snap)
+
+        log.debug(_s() + f"Removing {len(remove_holds)} obsolete holds")
+        for i, (hold, snaps) in enumerate(remove_holds.items()):
+            self.release_hold([s.longname for s in snaps], hold.to_tag())
+            for s in snaps:
+                s.num_holds -= 1
+                holds[s].remove(hold.to_tag())
+            log.debug(_s(1) + f"{i+1}/{len(remove_holds)} removed")
+        
+        return dataset
+
+
+
+
+def _normalize_name(name: T_AnySingle) -> str:
+    match name:
+        case str():
+            return name
+        case Path():
+            return str(name)
+        case Snapshot():
+            return name.longname
+        case Dataset():
+            return str(name.path)
+        case Pool():
+            return name.name
+        case _:
+            assert False
+
+@overload
+def _normalize_names(v: T_AnySingle | T_AnyCollection) -> list[str]: ...
+@overload
+def _normalize_names(v: T_AnySingle | T_AnyCollection | None) -> list[str] | None: ...
+def _normalize_names(v: T_AnySingle | T_AnyCollection | None) -> list[str] | None:
+    if v is None:
+        return None
+    return [_normalize_name(n) for n in _as_container(v)]
+
+def _as_container(v: T_AnySingle | T_AnyCollection) -> T_AnyCollection:
+    if isinstance(v, T_AnySingle):
+        return cast(T_AnyCollection, [v])
+    return v
+
+def _as_snap_container(v: T_Snap | T_Snaps) -> T_Snaps:
+    if isinstance(v, T_Snap):
+        return cast(T_Snaps, [v])
+    return v
+
+def _is_container_type[V](v: T_AnyCollection, typ: type[V]) -> TypeGuard[Collection[V]]:
+    try:
+        return isinstance(next(iter(v)), typ)
+    except TypeError:
+        raise ValueError(f"Not a container")
+    except StopIteration:
+        raise ValueError(f"Cannot determine type of empty container")
+
+def _filter_snaps(snaps: T_Snap | T_Snaps) -> Collection[Snapshot]:
+    snaps = _as_snap_container(snaps)
+    if _is_container_type(snaps, Snapshot):
+        return snaps
+    else:
+        return []
