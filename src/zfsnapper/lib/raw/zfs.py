@@ -3,11 +3,11 @@ from collections.abc import Collection, Sequence
 from itertools import batched
 from typing import IO, overload
 
-from .transport import CommandRunner
-from .cli_model import Property, RawHold
+from ..transport.command_runner import CommandRunner
+from .model import Property, RawHold
 from zfsnapper.common.utils import group_by
 
-from .raw_common import _is_empty, _normalize_str
+from .common import _is_empty, _normalize_str
 
 
 class RawZfs:

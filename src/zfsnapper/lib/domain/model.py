@@ -1,13 +1,12 @@
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from collections.abc import Collection
 from enum import StrEnum
 from datetime import datetime
 
-
-from .cli_model import Property, ZfsDatasetType, PropertySource
+from ..raw import Property, ZfsDatasetType, PropertySource
 from zfsnapper.common.parse_dataset_arg import ConnSpec
-from zfsnapper.common.replication.utils import Direction, Peering
+from zfsnapper.common.replication.utils import Direction, Peering, parse_holdtags
 from zfsnapper.common.path import Path
 
 
@@ -32,7 +31,7 @@ class PropertyName(StrEnum):
     RECORDSIZE = 'recordsize'
 
 
-@dataclass(eq=False)
+@dataclass(frozen=True, eq=False)
 class Snapshot:
     dataset: Path
     shortname: str
@@ -45,6 +44,10 @@ class Snapshot:
     """Properties as fetched from ZFS; may be outdated."""
 
     holdtags: set[str]
+
+    @property
+    def peerholds(self) -> set[Peering]:
+        return set(parse_holdtags(self.holdtags))
 
     def __repr__(self) -> str:
         return f"Snapshot({self.longname})"
@@ -129,7 +132,7 @@ class Snapshot:
         )
 
 
-@dataclass(eq=False)
+@dataclass(frozen=True, eq=False)
 class Pool:
     name: str
     guid: int
@@ -148,7 +151,7 @@ class Pool:
         )
 
 
-@dataclass(eq=False)
+@dataclass(frozen=True, eq=False)
 class PeeringInfo:
     peering: Peering
     host: ConnSpec
@@ -183,7 +186,7 @@ class PeeringInfo:
         return ';'.join(f'{f}={v}' for f, v in field_values.items())
 
 
-@dataclass(eq=False)
+@dataclass(frozen=True, eq=False)
 class Dataset:
     path: Path
     guid: int
@@ -273,7 +276,7 @@ class Dataset:
         )
 
 
-@dataclass(eq=True, frozen=True)
+@dataclass(frozen=True, eq=False)
 class Hold:
     dataset: Path
     snap_shortname: str
@@ -284,7 +287,6 @@ class Hold:
         return f"{self.dataset}@{self.snap_shortname}"
 
 
-
 class PeerField(StrEnum):
     """Used for custom user properties of the format `zfsnapper:peer:<slot>:<property>`."""
     DIRECTION = 'direction'
@@ -293,8 +295,6 @@ class PeerField(StrEnum):
     PATH = 'path'
     POOL_GUID = 'pool_guid'
     LAST_USED = 'last_used'
-
-
 
 
 # properties that will always be fetched
@@ -317,7 +317,6 @@ REQUIRED_POOL_PROPS = [
     PropertyName.NAME,
     PropertyName.GUID
 ]
-
 
 
 PEER_SLOT_PROPERTIES = [f'zfsnapper:peer:{i}' for i in range(50)]

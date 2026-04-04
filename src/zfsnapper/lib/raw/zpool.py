@@ -3,9 +3,9 @@ from collections.abc import Collection, Sequence
 from itertools import batched
 from typing import IO
 
-from .transport import CommandRunner
-from .cli_model import Property
-from .raw_common import _is_empty, _normalize_str
+from ..transport.command_runner import CommandRunner
+from .model import Property
+from .common import _is_empty, _normalize_str
 
 
 class RawZpool:
