@@ -50,6 +50,11 @@ def _as_snap_container(v: T.Snap | T.Snaps) -> T.Snaps:
         return cast(T.Snaps, [v])
     return v
 
+def _as_dataset_container(v: T.Dataset | T.Datasets) -> T.Datasets:
+    if isinstance(v, T.Dataset):
+        return cast(T.Datasets, [v])
+    return v
+
 def _is_container(v) -> TypeGuard[T.AnyCollection]:
     return not isinstance(v, T.AnySingle)
 

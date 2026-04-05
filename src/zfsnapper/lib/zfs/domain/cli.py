@@ -6,13 +6,20 @@ from typing import IO, cast, overload
 
 from zfsnapper.lib.zfs.raw import RawZfs, RawZpool, ZfsDatasetType, RawHold
 from .model import Snapshot, Dataset, Hold, Pool, REQUIRED_DATASET_PROPS, REQUIRED_SNAP_PROPS, REQUIRED_POOL_PROPS, PropertyName, PeeringInfo, Peering
-from .utils import _normalize_name, _normalize_names, _as_snap_container, _is_container_type, _is_container
+from .utils import _normalize_name, _normalize_names, _as_snap_container, _is_container_type, _is_container, _as_dataset_container
 from . import typedefs as T
 
 from zfsnapper.lib.cli.utils import group_by, space
 from zfsnapper.lib.zfs import Path
 
 log = logging.getLogger(__name__)
+
+
+"""
+TODO:
+- cannot do is_container_type on empty container!!!!
+- make holdtags a frozenset | None and maybe add a typeguard method
+"""
 
 
 class ZfsCli:
@@ -296,8 +303,14 @@ class ZfsCli:
         datasets: T.Dataset | T.Datasets | None = None,
         properties: Collection[str] = [],
         recursive: bool = False,
-        holdtags: bool = False
+        fetch_holdtags: bool = False,
+        fetch_parents: bool = True
     ) -> list[Snapshot]:
+        """
+        - runs `zfs get -t snapshot` to fetch snapshots
+        - runs `zfs get -t filesystem,volume` to fetch parent dataset GUIDs
+        - optionally runs `zfs holds` to fetch holdtags
+        """
         # Inject required properties
         properties = [*REQUIRED_SNAP_PROPS, *properties]
 
@@ -307,10 +320,39 @@ class ZfsCli:
             types=[ZfsDatasetType.SNAPSHOT],
             recursive=recursive,
         )
-        snap_to_props = group_by(fetched_props, key=lambda p: p.objname)
-        snaps = [Snapshot.from_props(props) for props in snap_to_props.values()]
+        snapname_to_props = group_by(fetched_props, key=lambda p: p.objname)
+        snapname_to_ds = {s: Path(s.split('@')[0]) for s in snapname_to_props.keys()}
 
-        if holdtags:
+        # Determine parent dataset GUIDs
+        needed_ds_paths: set[Path] = set(snapname_to_ds.values())
+
+        # Dataset to GUID mapping
+        ds_to_guid: dict[Path, int] = {}
+
+        # Update GUID mapping with any given datasets
+        if datasets is not None:
+            datasets_container = _as_dataset_container(datasets)
+            if _is_container_type(datasets_container, Dataset):
+                ds_to_guid |= {d.path: d.guid for d in datasets_container}
+
+        # Fetch missing datasets and update GUID mapping
+        missing_ds_paths = needed_ds_paths - ds_to_guid.keys()
+        if missing_ds_paths:
+            if fetch_parents:
+                new_ds = self.get_datasets(missing_ds_paths)
+                ds_to_guid |= {d.path: d.guid for d in new_ds}
+            else:
+                raise ValueError(f"Cannot fetch missing datasets (fetch_parents=False)")
+
+        snaps = [
+            Snapshot.from_props(
+                props,
+                dataset_guid=ds_to_guid[snapname_to_ds[snapname]]
+            )
+            for snapname, props in snapname_to_props.items()
+        ]
+
+        if fetch_holdtags:
             snaps = self.with_holdtags(snaps)
 
         return snaps

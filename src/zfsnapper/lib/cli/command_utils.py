@@ -72,7 +72,7 @@ def fetch_snaps(
 
     Snapshots are sorted by creation time (ascending order) and optionally filtered.
     """
-    snaps = cli.get_snapshots(datasets.p.matched, properties=props, holdtags=not ignore_holdtags)
+    snaps = cli.get_snapshots(datasets.p.matched, properties=props, fetch_holdtags=not ignore_holdtags)
     snaps = filter.apply(snaps)
     snaps = sorted(snaps, key=sortkey_snap_by_time)
     return snaps

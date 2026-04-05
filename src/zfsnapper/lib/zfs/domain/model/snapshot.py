@@ -8,9 +8,16 @@ from zfsnapper.lib.zfs import Property, PropertyName, Path
 from .peering import Peering
 
 
+@dataclass(frozen=True)
+class SnapshotKey:
+    dataset_guid: int
+    snapshot_guid: int
+
+
 @dataclass(frozen=True, eq=False)
 class Snapshot:
     dataset: Path
+    dataset_guid: int
     shortname: str
     guid: int
     timestamp: datetime
@@ -21,6 +28,13 @@ class Snapshot:
     """Properties as fetched from ZFS; may be outdated."""
 
     holdtags: set[str]
+
+    @property
+    def key(self) -> SnapshotKey:
+        return SnapshotKey(
+            dataset_guid=self.dataset_guid,
+            snapshot_guid=self.guid
+        )
 
     @property
     def peerholds(self) -> set[Peering]:
@@ -36,7 +50,7 @@ class Snapshot:
         return f"Snapshot({self.longname})"
 
     @classmethod
-    def from_props(cls, properties: Collection[Property]):
+    def from_props(cls, properties: Collection[Property], *, dataset_guid: int):
         P = PropertyName
         ps = {p.propname: p for p in properties}
 
@@ -53,6 +67,7 @@ class Snapshot:
 
         return cls(
             dataset=dataset,
+            dataset_guid=dataset_guid,
             shortname=shortname,
             guid=guid,
             timestamp=timestamp,
@@ -69,6 +84,7 @@ class Snapshot:
     def with_dataset(self, dataset: Path | str) -> Snapshot:
         return Snapshot(
             dataset=Path(dataset),
+            dataset_guid=self.dataset_guid,
             shortname=self.shortname,
             guid=self.guid,
             timestamp=self.timestamp,
@@ -81,6 +97,7 @@ class Snapshot:
     def with_shortname(self, shortname: str) -> Snapshot:
         return Snapshot(
             dataset=self.dataset,
+            dataset_guid=self.dataset_guid,
             shortname=shortname,
             guid=self.guid,
             timestamp=self.timestamp,
@@ -93,6 +110,7 @@ class Snapshot:
     def with_num_holds(self, num_holds: int) -> Snapshot:
         return Snapshot(
             dataset=self.dataset,
+            dataset_guid=self.dataset_guid,
             shortname=self.shortname,
             guid=self.guid,
             timestamp=self.timestamp,
@@ -105,6 +123,7 @@ class Snapshot:
     def with_holdtags(self, holdtags: Collection[str]) -> Snapshot:
         return Snapshot(
             dataset=self.dataset,
+            dataset_guid=self.dataset_guid,
             shortname=self.shortname,
             guid=self.guid,
             timestamp=self.timestamp,
@@ -117,6 +136,7 @@ class Snapshot:
     def with_tags(self, tags: Collection[str]) -> Snapshot:
         return Snapshot(
             dataset=self.dataset,
+            dataset_guid=self.dataset_guid,
             shortname=self.shortname,
             guid=self.guid,
             timestamp=self.timestamp,

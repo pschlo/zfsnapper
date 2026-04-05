@@ -4,4 +4,4 @@ from .hold import Hold
 from .path import Path
 from .peering import Peering, PeeringInfo
 from .pool import Pool
-from .snapshot import Snapshot
+from .snapshot import Snapshot, SnapshotKey
