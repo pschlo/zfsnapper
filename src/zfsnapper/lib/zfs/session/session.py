@@ -15,7 +15,7 @@ class SnapshotRef:
     session: ZfsSession
 
     def resolve(self) -> Snapshot:
-        return self.session.snapshot(self.guid)
+        return self.session._registry.get_snapshot(self.guid)
 
     @property
     def num_holds(self):
@@ -31,7 +31,7 @@ class DatasetRef:
     session: ZfsSession
 
     def resolve(self) -> Dataset:
-        return self.session.dataset(self.guid)
+        return self.session._registry.get_dataset(self.guid)
 
     @property
     def is_encrypted(self):
@@ -50,6 +50,55 @@ class DatasetRef:
         return self.resolve().peerinfos
 
 
+
+class Registry:
+    _pools: dict[int, Pool]
+    _datasets: dict[int, Dataset]
+    _snapshots: dict[int, Snapshot]
+
+    def __init__(self) -> None:
+        self._pools = {}
+        self._datasets = {}
+        self._snapshots = {}
+
+
+    def get_pool(self, guid: int) -> Pool:
+        return self._pools[guid]
+
+    def get_dataset(self, guid: int) -> Dataset:
+        return self._datasets[guid]
+    
+    def get_snapshot(self, guid: int) -> Snapshot:
+        return self._snapshots[guid]
+
+
+    def update(self, objs: Pool | Dataset | Snapshot | Collection[Pool | Dataset | Snapshot]):
+        objs = _as_container(objs)
+        for obj in objs:
+            match obj:
+                case Pool():
+                    self._pools[obj.guid] = obj
+                case Dataset():
+                    self._datasets[obj.guid] = obj
+                case Snapshot():
+                    self._snapshots[obj.guid] = obj
+                case _:
+                    assert False
+
+    def remove(self, objs: Pool | Dataset | Snapshot | Collection[Pool | Dataset | Snapshot]):
+        objs = _as_container(objs)
+        for obj in objs:
+            match obj:
+                case Pool():
+                    self._pools.pop(obj.guid, None)
+                case Dataset():
+                    self._datasets.pop(obj.guid, None)
+                case Snapshot():
+                    self._snapshots.pop(obj.guid, None)
+                case _:
+                    assert False
+
+
 class ZfsSession:
     """
     - A single ZFS instance/host.
@@ -58,35 +107,19 @@ class ZfsSession:
     - stateful
     """
     _cli: ZfsCli
-    _pools: dict[int, Pool]
-    _datasets: dict[int, Dataset]
-    _snapshots: dict[int, Snapshot]
+    _registry: Registry
 
-    def __init__(self, cli: ZfsCli) -> None:
+    def __init__(self, cli: ZfsCli, registry: Registry) -> None:
         self._cli = cli
+        self._registry = registry
 
     @classmethod
     def from_connspec(cls, conn: ConnSpec):
         cli = create_zfs_cli(conn)
         return cls(
-            cli=cli
+            cli=cli,
+            registry=Registry()
         )
-
-    def snapshot(self, guid: int) -> Snapshot:
-        return self._snapshots[guid]
-
-    def update_snapshots(self, snaps: Snapshot | Collection[Snapshot]) -> None:
-        snaps = _as_container(snaps)
-        for snap in snaps:
-            self._snapshots[snap.guid] = snap
-
-    def dataset(self, guid: int) -> Dataset:
-        return self._datasets[guid]
-
-    def update_datasets(self, datasets: Dataset | Collection[Dataset]) -> None:
-        datasets = _as_container(datasets)
-        for ds in datasets:
-            self._datasets[ds.guid] = ds
 
 
     def send_snapshot_async(
@@ -146,7 +179,7 @@ class ZfsSession:
             snaps=snaps,
             tag=tag
         )
-        self.update_snapshots(updated_snaps)
+        self._registry.update(updated_snaps)
 
 
     def release_hold(self, snaps: Snapshot | Collection[Snapshot], tag: str | Peering):
@@ -154,17 +187,17 @@ class ZfsSession:
             snaps=snaps,
             tag=tag
         )
-        self.update_snapshots(updated_snaps)
+        self._registry.update(updated_snaps)
 
 
     def remove_peer(self, dataset: Dataset, peering: Peering):
         updated_dataset, updated_snaps = self._cli.remove_peer(
             dataset=dataset,
             peering=peering,
-            snaps=self._snapshots.values(),  # TODO
+            snaps=self._registry._snapshots.values(),  # TODO
         )
-        self.update_datasets(updated_dataset)
-        self.update_snapshots(updated_snaps)
+        self._registry.update(updated_dataset)
+        self._registry.update(updated_snaps)
 
 
     def get_pool(
@@ -172,21 +205,25 @@ class ZfsSession:
         poolname: Pool,
         properties: Collection[str] = []
     ) -> Pool:
-        return self._cli.get_pool(
+        pool = self._cli.get_pool(
             poolname=poolname,
             properties=properties
         )
-    
+        self._registry.update(pool)
+        return pool
+
 
     def get_pools(
         self,
         poolnames: Pool | Collection[Pool] | None = None,
         properties: Collection[str] = []
     ) -> list[Pool]:
-        return self._cli.get_pools(
+        pools = self._cli.get_pools(
             poolnames=poolnames,
             properties=properties
         )
+        self._registry.update(pools)
+        return pools
 
 
     def get_dataset(
@@ -194,10 +231,12 @@ class ZfsSession:
         path: Dataset,
         properties: Collection[str] = [],
     ) -> Dataset:
-        return self._cli.get_dataset(
+        dataset = self._cli.get_dataset(
             path=path,
             properties=properties
         )
+        self._registry.update(dataset)
+        return dataset
 
 
     def get_datasets(
@@ -206,11 +245,13 @@ class ZfsSession:
         properties: Collection[str] = [],
         recursive: bool = False
     ) -> list[Dataset]:
-        return self._cli.get_datasets(
+        datasets = self._cli.get_datasets(
             paths=paths,
             properties=properties,
             recursive=recursive
         )
+        self._registry.update(datasets)
+        return datasets
 
 
     def create_snapshot(
@@ -233,7 +274,7 @@ class ZfsSession:
             snap=snap,
             new_shortname=new_shortname
         )
-        self.update_snapshots(updated_snap)
+        self._registry.update(updated_snap)
 
 
     def get_snapshots(
@@ -243,12 +284,14 @@ class ZfsSession:
         recursive: bool = False,
         holdtags: bool = False
     ) -> list[Snapshot]:
-        return self._cli.get_snapshots(
+        snaps = self._cli.get_snapshots(
             datasets=datasets,
             properties=properties,
             recursive=recursive,
             holdtags=holdtags
         )
+        self._registry.update(snaps)
+        return snaps
 
 
     def set_snapshot_tags(self, snaps: Snapshot | Collection[Snapshot], tags: Collection[str]) -> None:
@@ -256,13 +299,13 @@ class ZfsSession:
             snaps=snaps,
             tags=tags
         )
-        self.update_snapshots(updated_snaps)
+        self._registry.update(updated_snaps)
 
     def destroy_snapshots(self, snaps: Snapshot | Collection[Snapshot]) -> None:
         self._cli.destroy_snapshots(
             snaps=snaps
         )
-        # TODO: remove the snap from registry
+        self._registry.remove(snaps)
 
     def rollback(self, snap: Snapshot) -> None:
         return self._cli.rollback(
@@ -280,7 +323,9 @@ def _as_container(v: Snapshot | Collection[Snapshot]) -> Collection[Snapshot]: .
 def _as_container(v: Dataset | Collection[Dataset]) -> Collection[Dataset]: ...
 @overload
 def _as_container(v: Pool | Collection[Pool]) -> Collection[Pool]: ...
-def _as_container(v: AnySingle | AnyCollection) -> AnyCollection:
+@overload
+def _as_container(v: Pool | Dataset | Snapshot | Collection[Pool | Dataset | Snapshot]) -> Collection[Pool | Dataset | Snapshot]: ...
+def _as_container(v):
     if isinstance(v, AnySingle):
         return cast(AnyCollection, [v])
     return v
