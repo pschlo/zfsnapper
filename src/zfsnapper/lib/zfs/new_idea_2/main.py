@@ -1,8 +1,22 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field, replace
 from subprocess import Popen
 from typing import Any, Literal
 
+
+
+@dataclass
+class SnapshotRef:
+    """Essentially a `DomainFetchSnapshot` command wrapper. Extension/Handler of a ZfsManager."""
+    guid: int
+    manager: ZfsManager
+    refresh_on_resolve: bool | None = None
+    """Whether the snapshot will be fetched if it does not exist in the model cache."""
+
+    def resolve(self) -> FullSnapInfo:
+        # Fetch the snapshot via public manager API
+        return self.manager.snapshot(name="...", refresh=self.refresh_on_resolve)
 
 
 @dataclass
@@ -85,7 +99,7 @@ class DomainCommand[T]:
     - May build response from backend model
     - May execute any number of backend commands
     """
-    def execute(self, backend: ZfsBackend, refresh: bool | None = None) -> T:
+    def execute(self, backend: ZfsBackend, *, refresh: bool | None = None) -> T:
         """
         - `refresh`: If True, force backend command execution. If False, never execute backend command (may raise exception). If None, refresh if needed.
         """
@@ -93,34 +107,51 @@ class DomainCommand[T]:
 
 @dataclass
 class DomainCommand1(DomainCommand):
-    def execute(self, backend: ZfsBackend, refresh: bool | None = None):
+    def execute(self, backend: ZfsBackend, *, refresh: bool | None = None):
         backend.execute(BackendCommandA())
         backend.execute(BackendCommandB())
 
 @dataclass
 class DomainCommand2(DomainCommand):
-    def execute(self, backend: ZfsBackend, refresh: bool | None = None):
+    def execute(self, backend: ZfsBackend, *, refresh: bool | None = None):
         backend.execute(BackendCommandB())
         backend.execute(BackendCommandB())
         backend.execute(BackendCommandB())
 
 @dataclass
-class FullSnapInfo: ...
+class FullSnapInfo:
+    name: str = "dummy"
+    guid: int = 0
+
 
 @dataclass
 class DomainFetchSnapshot(DomainCommand[FullSnapInfo]):
     """Fetch a single snapshot."""
     name: str
 
-    def execute(self, backend: ZfsBackend, refresh: bool | None = None) -> FullSnapInfo:
+    def execute(self, backend: ZfsBackend, *, refresh: bool | None = None) -> FullSnapInfo:
         # Do lookups in backend's model to gather information about the snapshot
         # Construct FullSnapInfo
         return FullSnapInfo()
 
+
+@dataclass
+class DomainFetchSnapshotRef(DomainCommand[SnapshotRef]):
+    manager: ZfsManager
+    name: str
+    refresh_on_resolve: bool | None
+    """Passed to `SnapshotRef`."""
+
+    def execute(self, backend: ZfsBackend, *, refresh: bool | None = None) -> Any:
+        # Must get GUID for stable identification
+        snap_info = DomainFetchSnapshot(self.name).execute(backend, refresh=refresh)
+        return SnapshotRef(guid=snap_info.guid, manager=self.manager, refresh_on_resolve=self.refresh_on_resolve)
+
+
 @dataclass
 class DomainFetchSnapshots(DomainCommand[list[FullSnapInfo]]):
     """Fetch all snapshots."""
-    def execute(self, backend: ZfsBackend, refresh: bool | None = None) -> list[FullSnapInfo]:
+    def execute(self, backend: ZfsBackend, *, refresh: bool | None = None) -> list[FullSnapInfo]:
         # Either we construct response from backend's model,
         # or we execute backend commands and construct response from either backend command response or the new model
         limited_snap_infos: list[LimitedSnapInfo] = backend.execute(BackendFetchSnapshots())  # or lookup model
@@ -137,6 +168,22 @@ class DomainFetchSnapshots(DomainCommand[list[FullSnapInfo]]):
         ]
 
 
+@dataclass
+class DomainFetchSnapshotsRefs(DomainCommand[list[SnapshotRef]]):
+    manager: ZfsManager
+    refresh_on_resolve: bool | None
+    """Passed to `SnapshotRef`."""
+
+    def execute(self, backend: ZfsBackend, *, refresh: bool | None = None) -> Any:
+        # Must get GUID for stable identification
+        snap_infos = DomainFetchSnapshots().execute(backend, refresh=refresh)
+        return [
+            SnapshotRef(guid=snap_info.guid, manager=self.manager, refresh_on_resolve=self.refresh_on_resolve)
+            for snap_info in snap_infos
+        ]
+
+
+
 ###########################
 
 
@@ -145,30 +192,53 @@ class ZfsManager:
     _backend: ZfsBackend
     _history: list[DomainCommand]
 
-    def execute[T](self, cmd: DomainCommand[T]) -> T:
-        result = cmd.execute(self._backend)
+    def execute[T](self, cmd: DomainCommand[T], *, refresh: bool | None = None) -> T:
+        result = cmd.execute(self._backend, refresh=refresh)
         self._history.append(cmd)
         return result
 
 
     ## Convenience methods
 
-    def complex_command_1(self):
+    def complex_command_1(self, *, refresh: bool | None = None):
         return self.execute(
-            DomainCommand2()
+            DomainCommand2(),
+            refresh=refresh
         )
 
-    def complex_command_2(self):
+    def complex_command_2(self, *, refresh: bool | None = None):
         return self.execute(
-            DomainCommand2()
+            DomainCommand2(),
+            refresh=refresh
         )
 
-    def snapshot(self, name: str):
+    def snapshot(self, name: str, *, refresh: bool | None = None):
         return self.execute(
-            DomainFetchSnapshot(name)
+            DomainFetchSnapshot(name),
+            refresh=refresh
         )
 
-    def snapshots(self):
+    def snapshot_ref(self, name: str, refresh_on_resolve: bool | None = None, *, refresh: bool | None = None):
         return self.execute(
-            DomainFetchSnapshots()
+            DomainFetchSnapshotRef(
+                manager=self,
+                name=name,
+                refresh_on_resolve=refresh_on_resolve
+            ),
+            refresh=refresh
+        )
+
+    def snapshots(self, *, refresh: bool | None = None):
+        return self.execute(
+            DomainFetchSnapshots(),
+            refresh=refresh
+        )
+
+    def snapshots_refs(self, refresh_on_resolve: bool | None = None, *, refresh: bool | None = None):
+        return self.execute(
+            DomainFetchSnapshotsRefs(
+                manager=self,
+                refresh_on_resolve=refresh_on_resolve
+            ),
+            refresh=refresh
         )
