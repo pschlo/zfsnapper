@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 @dataclass
 class SnapshotRef:
-    """Essentially a `DomainFetchSnapshot` command wrapper. Extension/Handler of a ZfsManager."""
+    """lazy handles to snapshots; belong to a ZfsManager."""
     guid: int
     manager: ZfsManager
     refresh_on_resolve: bool | None = None
@@ -53,6 +53,8 @@ class ZfsBackend:
 
 class BackendCommand[T]:
     """
+    one concrete ZFS call + model projection
+
     - Results in exactly one ZFS command execution
     - Updates the model accordingly
     """
@@ -96,6 +98,8 @@ class BackendFetchSnapshots(BackendCommand[list[LimitedSnapInfo]]):
 
 class DomainCommand[T]:
     """
+    orchestration, cache policy, assembling richer results.
+
     - May build response from backend model
     - May execute any number of backend commands
     """
@@ -189,6 +193,7 @@ class DomainFetchSnapshotsRefs(DomainCommand[list[SnapshotRef]]):
 
 @dataclass
 class ZfsManager:
+    """ergonomic façade for domain commands."""
     _backend: ZfsBackend
     _history: list[DomainCommand]
 
