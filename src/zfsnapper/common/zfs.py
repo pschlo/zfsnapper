@@ -24,6 +24,7 @@ class PropertySource(StrEnum):
     INHERITED = "inherited"
     DEFAULT = "default"
     LOCAL = "local"
+    RECEIVED = "received"
 
 
 @dataclass(frozen=True)
@@ -47,9 +48,11 @@ def parse_property_source(source: str) -> PropertySource:
         return PropertySource.LOCAL
     if source.startswith("inherited"):
         return PropertySource.INHERITED
+    if source == "received":
+        return PropertySource.RECEIVED
     if source == "default":
         return PropertySource.DEFAULT
-    raise ValueError(f"Invalid property source")
+    raise ValueError(f"Invalid property source: {source}")
 
 
 class ZfsProperty(StrEnum):
@@ -279,7 +282,7 @@ class Dataset:
 
             slot = int(parts[2])
             # Ignore inherited peer slots
-            if prop == '-' or prop.source != PropertySource.LOCAL:
+            if prop.value == '-' or prop.source == PropertySource.INHERITED:
                 # Slot is empty
                 peer_slots_dict[slot] = None
                 continue
