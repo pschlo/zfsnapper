@@ -1,4 +1,5 @@
-# zfsnapper
+
+# <div align="center"><img width="200" alt="zfsnapper icon 3" src="https://github.com/user-attachments/assets/b6d6e0f6-45ec-42bf-ac09-2624fee125d4" /> </br>zfsnapper</div>
 
 `zfsnapper` is an opinionated command-line tool for managing ZFS snapshots.
 
