@@ -34,29 +34,35 @@ remote source dataset to a local destination dataset.
 the preferred path. The installed CLI is available as both `zfsnapper` and the
 shorter alias `zsr`; this README uses `zsr`.
 
+For normal command-line use, prefer an isolated tool installer such as `uv` or
+`pipx`. This keeps zfsnapper and its Python dependencies separate from your
+system Python and from unrelated virtual environments.
+
 With `uv`:
 
 ```sh
 uv tool install git+https://github.com/pschlo/zfsnapper.git
 ```
 
-Install a specific release, branch, or commit:
+Or with `pipx`:
+
+```sh
+pipx install git+https://github.com/pschlo/zfsnapper.git
+```
+
+Install a specific release, branch, or commit by appending `@...`:
 
 ```sh
 uv tool install git+https://github.com/pschlo/zfsnapper.git@v1.6.47
 ```
 
-`pip` can also install Python packages directly from Git:
+Plain `pip` works too, but installs into the currently selected Python
+environment:
 
 ```sh
 python -m pip install git+https://github.com/pschlo/zfsnapper.git
 ```
 
-For a requirements file, a direct reference is often clearer:
-
-```txt
-zfsnapper @ git+https://github.com/pschlo/zfsnapper.git@v1.6.47
-```
 
 ## Requirements
 
