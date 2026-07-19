@@ -45,7 +45,7 @@ zsr --help
 For a one-off command without permanent installation, use `uvx`:
 
 ```sh
-uvx --from https://github.com/pschlo/zfsnapper/archive/refs/heads/main.zip zsr --help
+uvx https://github.com/pschlo/zfsnapper/archive/refs/heads/main.zip --help
 ```
 
 For development from a checkout, use the locked project environment:
