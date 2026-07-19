@@ -31,37 +31,28 @@ remote source dataset to a local destination dataset.
 
 ## Installation
 
-`zfsnapper` is not currently published on PyPI. Installing from Git is therefore
-the preferred path. The installed CLI is available as both `zfsnapper` and the
-shorter alias `zsr`; this README uses `zsr`.
+`zfsnapper` is not currently published on PyPI. The installed CLI is available
+as both `zfsnapper` and the shorter alias `zsr`; this README uses `zsr`.
 
-For normal command-line use, prefer an isolated tool installer such as `uv` or
-`pipx`. This keeps zfsnapper and its Python dependencies separate from your
-system Python and from unrelated virtual environments.
-
-With `uv`:
+Install it from the public GitHub source archive with uv. This does not require
+Git and keeps the application isolated from system Python:
 
 ```sh
-uv tool install git+https://github.com/pschlo/zfsnapper.git
+uv tool install https://github.com/pschlo/zfsnapper/archive/refs/heads/main.zip
+zsr --help
 ```
 
-Or with `pipx`:
+For a one-off command without permanent installation, use `uvx`:
 
 ```sh
-pipx install git+https://github.com/pschlo/zfsnapper.git
+uvx --from https://github.com/pschlo/zfsnapper/archive/refs/heads/main.zip zsr --help
 ```
 
-Install a specific release, branch, or commit by appending `@...`:
+For development from a checkout, use the locked project environment:
 
 ```sh
-uv tool install git+https://github.com/pschlo/zfsnapper.git@v1.6.47
-```
-
-Plain `pip` works too, but installs into the currently selected Python
-environment:
-
-```sh
-python -m pip install git+https://github.com/pschlo/zfsnapper.git
+uv sync --locked
+uv run zsr --help
 ```
 
 
